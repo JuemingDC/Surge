@@ -1,5 +1,5 @@
-!name=Pingme签到
-#!desc=
+#!name=Pingme签到
+#!desc=奶思转换过的surge版pingme签到
 
 [Script]
 PingMe获取签到参数 = type=http-request, pattern=^https:\/\/api\.pingmeapp\.net\/app\/queryBalanceAndBonus, script-path=https://raw.githubusercontent.com/fmz200/wool_scripts/main/Scripts/cookie/get_cookie.js, timeout=60
