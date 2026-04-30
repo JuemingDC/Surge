@@ -7,7 +7,7 @@
 Surge Module:
 
 [Script]
-WeTalk 参数抓取 = type=http-request, pattern=^https:\/\/api\.wetalkapp\.com\/app\/queryBalanceAndBonus, script-path=https://raw.githubusercontent.com/你的用户名/你的仓库/main/WeTalk.Surge.js, timeout=10
+WeTalk 参数抓取 = type=http-request, pattern=^https:\/\/api\.wetalkapp\.com\/app\/queryBalanceAndBonus, script-path=https://raw.githubusercontent.com/JuemingDC/Surge/refs/heads/main/Wetalk_capture%20.js, timeout=10
 WeTalk 签到任务 = type=cron, cronexp="20 8,20 * * *", script-path=https://github.com/JuemingDC/Surge/raw/main/Wetalk.js, timeout=120
 
 [MITM]
