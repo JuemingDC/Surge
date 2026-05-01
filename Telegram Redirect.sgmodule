@@ -1,0 +1,12 @@
+#!name=Telegram 第三方客户端重定向
+#!desc=t.me 链接重定向至 Telegram / Swiftgram / Turrit / iMe / Nicegram / Lingogram
+#!author=converted for Surge
+#!category=Redirect
+#!arguments=CLIENT=Telegram
+#!arguments-desc=CLIENT: 可选 Telegram, Swiftgram, Turrit, iMe, Nicegram, Lingogram
+
+[Script]
+Telegram 第三方客户端重定向 = type=http-request, pattern=^https?:\/\/t\.me\/.+, script-path=https://raw.githubusercontent.com/你的用户名/你的仓库/main/telegram_redirect_surge.js, timeout=5, argument=CLIENT=%CLIENT%
+
+[MITM]
+hostname = %APPEND% t.me
