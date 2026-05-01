@@ -2,7 +2,7 @@
  * Surge: t.me → 第三方 Telegram 客户端重定向
  *
  * 模块参数：
- * argument=CLIENT=Telegram
+ * argument=CLIENT
  */
 
 const SCHEME = {
