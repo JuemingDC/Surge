@@ -2,7 +2,7 @@
 #!desc=t.me 链接重定向至 Telegram / Swiftgram / Turrit / iMe / Nicegram / Lingogram
 #!author=converted for Surge
 #!category=Redirect
-#!arguments=CLIENT=Telegram
+#!arguments=CLIENT
 #!arguments-desc=CLIENT: 可选 Telegram, Swiftgram, Turrit, iMe, Nicegram, Lingogram
 
 [Script]
