@@ -1,7 +1,6 @@
 // WeTalk_account_manager.js for Surge
-// 用途：查看、删除、清空 WeTalk 已保存账号
-// module 参数：DELETE_ACCOUNTS、DELETE_ALL
-// script 参数：ACTION=list / delete
+// 单参数版：通过 WETALK_ACTION 控制账号管理
+// 支持：list / delete=1 / delete=1,2 / delete=email / clear=true
 
 const scriptName = "WeTalk账号管理";
 const storeKey = "wetalk_accounts_v1";
@@ -36,6 +35,43 @@ function parseArgs(str) {
   });
 
   return out;
+}
+
+function parseUnifiedAction(str) {
+  const raw = String(str || "").trim();
+
+  if (!raw || raw === "list") {
+    return {
+      action: "list"
+    };
+  }
+
+  const obj = parseArgs(raw);
+
+  if (obj.clear || obj.CLEAR) {
+    return {
+      action: "clear",
+      value: obj.clear || obj.CLEAR
+    };
+  }
+
+  if (obj.delete || obj.DELETE) {
+    return {
+      action: "delete",
+      value: obj.delete || obj.DELETE
+    };
+  }
+
+  if (obj.del || obj.DEL) {
+    return {
+      action: "delete",
+      value: obj.del || obj.DEL
+    };
+  }
+
+  return {
+    action: "list"
+  };
 }
 
 function loadStore() {
@@ -168,46 +204,44 @@ function matchAccountIds(store, tokens) {
   return result;
 }
 
-function boolFromValue(value, fallback) {
-  if (value === undefined || value === null || value === "") return !!fallback;
-
-  const s = String(value).trim().toLowerCase();
-
+function boolFromValue(value) {
+  const s = String(value || "").trim().toLowerCase();
   return s === "true" || s === "1" || s === "yes" || s === "y";
 }
 
 (function main() {
   const store = loadStore();
-  const args = parseArgs(typeof $argument !== "undefined" ? $argument : "");
-  const action = String(args.ACTION || "list").trim().toLowerCase();
   const accountList = formatAccountList(store);
 
-  if (action === "list") {
+  const parsed = parseUnifiedAction(typeof $argument !== "undefined" ? $argument : "");
+
+  if (parsed.action === "list") {
     notify(
       "当前账号：" + (store.order || []).length + " 个",
       accountList +
-      "\n\n删除指定账号：\n1. 打开模块参数\n2. 在 DELETE_ACCOUNTS 输入编号、邮箱、账号ID或别名\n3. 保存模块\n4. 手动运行「WeTalk 删除账号」\n\n清空全部：DELETE_ALL=true 后运行「WeTalk 删除账号」。"
+      "\n\n参数示例：" +
+      "\nlist：查看账号" +
+      "\ndelete=1：删除第 1 个账号" +
+      "\ndelete=1,2：删除多个账号" +
+      "\ndelete=邮箱：按邮箱删除" +
+      "\nclear=true：清空全部账号"
     );
 
     $done();
     return;
   }
 
-  if (action !== "delete") {
-    notify(
-      "未知操作",
-      "当前 ACTION=" + action + "\n支持 ACTION=list 或 ACTION=delete。"
-    );
+  if (parsed.action === "clear") {
+    if (!boolFromValue(parsed.value)) {
+      notify(
+        "清空参数无效",
+        "如需清空全部账号，请填写：clear=true"
+      );
 
-    $done();
-    return;
-  }
+      $done();
+      return;
+    }
 
-  const deleteAll = boolFromValue(args.DELETE_ALL, false);
-  const deleteInput = args.DELETE_ACCOUNTS || "";
-  const deleteTokens = splitList(deleteInput);
-
-  if (deleteAll) {
     const count = Object.keys(store.accounts || {}).length;
 
     store.accounts = {};
@@ -219,58 +253,74 @@ function boolFromValue(value, fallback) {
       "已清空全部账号",
       "删除前账号数：" + count +
       "\n已执行清空。" +
-      "\n\n请把模块参数 DELETE_ALL 改回 false，避免下次误删。"
+      "\n\n请将模块参数 WETALK_ACTION 改回空值或 list，避免误操作。"
     );
 
     $done();
     return;
   }
 
-  if (!deleteTokens.length) {
+  if (parsed.action === "delete") {
+    const deleteInput = parsed.value || "";
+    const deleteTokens = splitList(deleteInput);
+
+    if (!deleteTokens.length) {
+      notify(
+        "未输入删除账号",
+        "示例：" +
+        "\ndelete=1" +
+        "\ndelete=1,2" +
+        "\ndelete=example@email.com" +
+        "\n\n当前账号列表：\n" + accountList
+      );
+
+      $done();
+      return;
+    }
+
+    const matchedIds = matchAccountIds(store, deleteTokens);
+
+    if (!matchedIds.length) {
+      notify(
+        "未匹配到要删除的账号",
+        "删除输入：" + deleteInput +
+        "\n\n当前账号列表：\n" + accountList +
+        "\n\n建议优先使用编号，例如 delete=1。"
+      );
+
+      $done();
+      return;
+    }
+
+    const deleted = [];
+
+    matchedIds.forEach(function (id) {
+      const acc = store.accounts[id] || {};
+      deleted.push(acc.alias || acc.email || acc.id || id);
+      delete store.accounts[id];
+    });
+
+    saveStore(store);
+
+    const afterStore = loadStore();
+
     notify(
-      "未输入删除账号",
-      "请先在模块参数 DELETE_ACCOUNTS 中输入要删除的账号。" +
-      "\n\n支持输入：\n- 编号，例如 1\n- 多个编号，例如 1,2\n- 邮箱\n- 账号ID\n- alias" +
-      "\n\n当前账号列表：\n" + accountList
-    );
-
-    $done();
-    return;
-  }
-
-  const matchedIds = matchAccountIds(store, deleteTokens);
-
-  if (!matchedIds.length) {
-    notify(
-      "未匹配到要删除的账号",
+      "账号已删除",
       "删除输入：" + deleteInput +
-      "\n\n当前账号列表：\n" + accountList +
-      "\n\n建议优先使用编号，例如 1 或 2。"
+      "\n\n已删除：\n- " + deleted.join("\n- ") +
+      "\n\n删除后账号数：" + afterStore.order.length +
+      "\n\n剩余账号列表：\n" + formatAccountList(afterStore) +
+      "\n\n请将模块参数 WETALK_ACTION 改回空值或 list，避免下次误删。"
     );
 
     $done();
     return;
   }
-
-  const deleted = [];
-
-  matchedIds.forEach(function (id) {
-    const acc = store.accounts[id] || {};
-    deleted.push(acc.alias || acc.email || acc.id || id);
-    delete store.accounts[id];
-  });
-
-  saveStore(store);
-
-  const afterStore = loadStore();
 
   notify(
-    "账号已删除",
-    "删除输入：" + deleteInput +
-    "\n\n已删除：\n- " + deleted.join("\n- ") +
-    "\n\n删除后账号数：" + afterStore.order.length +
-    "\n\n剩余账号列表：\n" + formatAccountList(afterStore) +
-    "\n\n请把模块参数 DELETE_ACCOUNTS 清空，避免下次误删。"
+    "未知操作",
+    "当前参数：" + String($argument || "") +
+    "\n支持：list / delete=1 / clear=true"
   );
 
   $done();
