@@ -1,80 +1,241 @@
-//2026/04/30
-/*
-@Name：WeTalk 自动化签到+视频奖励 Surge版
-@Author：TG@ZenMoFiShi+Chance
-@Convert：Quantumult X -> Surge
+// WeTalk_task.js for Surge
+// 用途：定时执行签到与视频奖励任务
+// 参数：RUN_ACCOUNTS 留空运行全部；可填编号、邮箱、账号ID或别名，多个用逗号/分号/换行分隔。
 
-Surge Module:
+const scriptName = "WeTalk";
+const storeKey = "wetalk_accounts_v1";
 
-[Script]
-WeTalk 参数抓取 = type=http-request, pattern=^https:\/\/api\.wetalkapp\.com\/app\/queryBalanceAndBonus, script-path=https://raw.githubusercontent.com/JuemingDC/Surge/refs/heads/main/Wetalk_capture%20.js, timeout=10
-WeTalk 签到任务 = type=cron, cronexp="20 8,20 * * *", script-path=https://github.com/JuemingDC/Surge/raw/main/Wetalk.js, timeout=120
-
-[MITM]
-hostname = %APPEND% api.wetalkapp.com
-*/
-
-const scriptName = 'WeTalk';
-const storeKey = 'wetalk_accounts_v1';
-const SECRET = '0fOiukQq7jXZV2GRi9LGlO';
-const API_HOST = 'api.wetalkapp.com';
+const SECRET = "0fOiukQq7jXZV2GRi9LGlO";
+const API_HOST = "api.wetalkapp.com";
 
 const MAX_VIDEO = 5;
 const VIDEO_DELAY = 8000;
 const ACCOUNT_GAP = 3500;
 
 const IOS_VERSIONS = [
-  '17.5.1',
-  '17.6.1',
-  '17.4.1',
-  '17.2.1',
-  '16.7.8',
-  '17.6',
-  '17.3.1',
-  '18.0.1',
-  '17.1.2',
-  '16.6.1'
+  "17.5.1",
+  "17.6.1",
+  "17.4.1",
+  "17.2.1",
+  "16.7.8",
+  "17.6",
+  "17.3.1",
+  "18.0.1",
+  "17.1.2",
+  "16.6.1"
 ];
 
-const IOS_SCALES = [
-  '2.00',
-  '3.00',
-  '3.00',
-  '2.00',
-  '3.00'
-];
+const IOS_SCALES = ["2.00", "3.00", "3.00", "2.00", "3.00"];
 
 const IPHONE_MODELS = [
-  'iPhone14,3',
-  'iPhone13,3',
-  'iPhone15,3',
-  'iPhone16,1',
-  'iPhone14,7',
-  'iPhone13,2',
-  'iPhone15,2',
-  'iPhone12,1'
+  "iPhone14,3",
+  "iPhone13,3",
+  "iPhone15,3",
+  "iPhone16,1",
+  "iPhone14,7",
+  "iPhone13,2",
+  "iPhone15,2",
+  "iPhone12,1"
 ];
 
 const CFN_VERS = [
-  '1410.0.3',
-  '1494.0.7',
-  '1568.100.1',
-  '1209.1',
-  '1474.0.4',
-  '1568.200.2'
+  "1410.0.3",
+  "1494.0.7",
+  "1568.100.1",
+  "1209.1",
+  "1474.0.4",
+  "1568.200.2"
 ];
 
 const DARWIN_VERS = [
-  '22.6.0',
-  '23.5.0',
-  '23.6.0',
-  '24.0.0',
-  '22.4.0'
+  "22.6.0",
+  "23.5.0",
+  "23.6.0",
+  "24.0.0",
+  "22.4.0"
 ];
 
-/* =========================
-   Surge 环境封装
-========================= */
+function md5(input) {
+  function cmn(q, a, b, x, s, t) {
+    return add32(rotl(add32(add32(a, q), add32(x, t)), s), b);
+  }
+
+  function ff(a, b, c, d, x, s, t) {
+    return cmn((b & c) | ((~b) & d), a, b, x, s, t);
+  }
+
+  function gg(a, b, c, d, x, s, t) {
+    return cmn((b & d) | (c & (~d)), a, b, x, s, t);
+  }
+
+  function hh(a, b, c, d, x, s, t) {
+    return cmn(b ^ c ^ d, a, b, x, s, t);
+  }
+
+  function ii(a, b, c, d, x, s, t) {
+    return cmn(c ^ (b | (~d)), a, b, x, s, t);
+  }
+
+  function rotl(x, c) {
+    return (x << c) | (x >>> (32 - c));
+  }
+
+  function add32(a, b) {
+    return (a + b) & 0xffffffff;
+  }
+
+  function md5blk(s) {
+    const md5blks = [];
+
+    for (let i = 0; i < 64; i += 4) {
+      md5blks[i >> 2] =
+        s.charCodeAt(i) +
+        (s.charCodeAt(i + 1) << 8) +
+        (s.charCodeAt(i + 2) << 16) +
+        (s.charCodeAt(i + 3) << 24);
+    }
+
+    return md5blks;
+  }
+
+  function md51(s) {
+    const n = s.length;
+    const state = [1732584193, -271733879, -1732584194, 271733878];
+
+    let i;
+
+    for (i = 64; i <= n; i += 64) {
+      md5cycle(state, md5blk(s.substring(i - 64, i)));
+    }
+
+    s = s.substring(i - 64);
+
+    let tail = new Array(16).fill(0);
+
+    for (i = 0; i < s.length; i++) {
+      tail[i >> 2] |= s.charCodeAt(i) << ((i % 4) << 3);
+    }
+
+    tail[i >> 2] |= 0x80 << ((i % 4) << 3);
+
+    if (i > 55) {
+      md5cycle(state, tail);
+      tail = new Array(16).fill(0);
+    }
+
+    const tmp = n * 8;
+    tail[14] = tmp & 0xffffffff;
+    tail[15] = (tmp / 0x100000000) | 0;
+
+    md5cycle(state, tail);
+
+    return state;
+  }
+
+  function md5cycle(x, k) {
+    let a = x[0];
+    let b = x[1];
+    let c = x[2];
+    let d = x[3];
+
+    a = ff(a, b, c, d, k[0], 7, -680876936);
+    d = ff(d, a, b, c, k[1], 12, -389564586);
+    c = ff(c, d, a, b, k[2], 17, 606105819);
+    b = ff(b, c, d, a, k[3], 22, -1044525330);
+
+    a = ff(a, b, c, d, k[4], 7, -176418897);
+    d = ff(d, a, b, c, k[5], 12, 1200080426);
+    c = ff(c, d, a, b, k[6], 17, -1473231341);
+    b = ff(b, c, d, a, k[7], 22, -45705983);
+
+    a = ff(a, b, c, d, k[8], 7, 1770035416);
+    d = ff(d, a, b, c, k[9], 12, -1958414417);
+    c = ff(c, d, a, b, k[10], 17, -42063);
+    b = ff(b, c, d, a, k[11], 22, -1990404162);
+
+    a = ff(a, b, c, d, k[12], 7, 1804603682);
+    d = ff(d, a, b, c, k[13], 12, -40341101);
+    c = ff(c, d, a, b, k[14], 17, -1502002290);
+    b = ff(b, c, d, a, k[15], 22, 1236535329);
+
+    a = gg(a, b, c, d, k[1], 5, -165796510);
+    d = gg(d, a, b, c, k[6], 9, -1069501632);
+    c = gg(c, d, a, b, k[11], 14, 643717713);
+    b = gg(b, c, d, a, k[0], 20, -373897302);
+
+    a = gg(a, b, c, d, k[5], 5, -701558691);
+    d = gg(d, a, b, c, k[10], 9, 38016083);
+    c = gg(c, d, a, b, k[15], 14, -660478335);
+    b = gg(b, c, d, a, k[4], 20, -405537848);
+
+    a = gg(a, b, c, d, k[9], 5, 568446438);
+    d = gg(d, a, b, c, k[14], 9, -1019803690);
+    c = gg(c, d, a, b, k[3], 14, -187363961);
+    b = gg(b, c, d, a, k[8], 20, 1163531501);
+
+    a = gg(a, b, c, d, k[13], 5, -1444681467);
+    d = gg(d, a, b, c, k[2], 9, -51403784);
+    c = gg(c, d, a, b, k[7], 14, 1735328473);
+    b = gg(b, c, d, a, k[12], 20, -1926607734);
+
+    a = hh(a, b, c, d, k[5], 4, -378558);
+    d = hh(d, a, b, c, k[8], 11, -2022574463);
+    c = hh(c, d, a, b, k[11], 16, 1839030562);
+    b = hh(b, c, d, a, k[14], 23, -35309556);
+
+    a = hh(a, b, c, d, k[1], 4, -1530992060);
+    d = hh(d, a, b, c, k[4], 11, 1272893353);
+    c = hh(c, d, a, b, k[7], 16, -155497632);
+    b = hh(b, c, d, a, k[10], 23, -1094730640);
+
+    a = hh(a, b, c, d, k[13], 4, 681279174);
+    d = hh(d, a, b, c, k[0], 11, -358537222);
+    c = hh(c, d, a, b, k[3], 16, -722521979);
+    b = hh(b, c, d, a, k[6], 23, 76029189);
+
+    a = hh(a, b, c, d, k[9], 4, -640364487);
+    d = hh(d, a, b, c, k[12], 11, -421815835);
+    c = hh(c, d, a, b, k[15], 16, 530742520);
+    b = hh(b, c, d, a, k[2], 23, -995338651);
+
+    a = ii(a, b, c, d, k[0], 6, -198630844);
+    d = ii(d, a, b, c, k[7], 10, 1126891415);
+    c = ii(c, d, a, b, k[14], 15, -1416354905);
+    b = ii(b, c, d, a, k[5], 21, -57434055);
+
+    a = ii(a, b, c, d, k[12], 6, 1700485571);
+    d = ii(d, a, b, c, k[3], 10, -1894986606);
+    c = ii(c, d, a, b, k[10], 15, -1051523);
+    b = ii(b, c, d, a, k[1], 21, -2054922799);
+
+    a = ii(a, b, c, d, k[8], 6, 1873313359);
+    d = ii(d, a, b, c, k[15], 10, -30611744);
+    c = ii(c, d, a, b, k[6], 15, -1560198380);
+    b = ii(b, c, d, a, k[13], 21, 1309151649);
+
+    a = ii(a, b, c, d, k[4], 6, -145523070);
+    d = ii(d, a, b, c, k[11], 10, -1120210379);
+    c = ii(c, d, a, b, k[2], 15, 718787259);
+    b = ii(b, c, d, a, k[9], 21, -343485551);
+
+    x[0] = add32(a, x[0]);
+    x[1] = add32(b, x[1]);
+    x[2] = add32(c, x[2]);
+    x[3] = add32(d, x[3]);
+  }
+
+  function rhex(n) {
+    let s = "";
+
+    for (let j = 0; j < 4; j++) {
+      s += ("0" + ((n >> (j * 8)) & 255).toString(16)).slice(-2);
+    }
+
+    return s;
+  }
+
+  return md51(String(input)).map(rhex).join("");
+}
 
 function readStore(key) {
   return $persistentStore.read(key);
@@ -84,8 +245,194 @@ function writeStore(value, key) {
   return $persistentStore.write(value, key);
 }
 
-function notify(title, body) {
-  $notification.post(scriptName, title, body || '');
+function notify(subtitle, body) {
+  $notification.post(scriptName, subtitle, body || "");
+}
+
+function parseArgs(str) {
+  const out = {};
+
+  String(str || "").split("&").forEach(function (pair) {
+    if (!pair) return;
+
+    const idx = pair.indexOf("=");
+    const key = idx >= 0 ? pair.slice(0, idx) : pair;
+    const val = idx >= 0 ? pair.slice(idx + 1) : "";
+
+    try {
+      out[key] = decodeURIComponent(val);
+    } catch (e) {
+      out[key] = val;
+    }
+  });
+
+  return out;
+}
+
+function pad2(n) {
+  return n < 10 ? "0" + n : String(n);
+}
+
+function getUTCSignDate() {
+  const now = new Date();
+
+  return now.getUTCFullYear() + "-" +
+    pad2(now.getUTCMonth() + 1) + "-" +
+    pad2(now.getUTCDate()) + " " +
+    pad2(now.getUTCHours()) + ":" +
+    pad2(now.getUTCMinutes()) + ":" +
+    pad2(now.getUTCSeconds());
+}
+
+function safeDecode(value) {
+  if (value == null) return "";
+
+  try {
+    return decodeURIComponent(String(value));
+  } catch (e) {
+    return String(value);
+  }
+}
+
+function emailKeyOf(paramsRaw) {
+  const raw = paramsRaw && paramsRaw.email;
+  return raw ? safeDecode(raw).trim().toLowerCase() : "";
+}
+
+function loadStore() {
+  const raw = readStore(storeKey);
+
+  if (!raw) {
+    return {
+      version: 3,
+      accounts: {},
+      order: []
+    };
+  }
+
+  try {
+    const obj = JSON.parse(raw);
+
+    if (!obj.accounts || typeof obj.accounts !== "object") {
+      obj.accounts = {};
+    }
+
+    if (!Array.isArray(obj.order)) {
+      obj.order = Object.keys(obj.accounts);
+    }
+
+    obj.order = obj.order.filter(function (id) {
+      return obj.accounts[id];
+    });
+
+    obj.version = 3;
+    return obj;
+  } catch (e) {
+    return {
+      version: 3,
+      accounts: {},
+      order: []
+    };
+  }
+}
+
+function saveStore(store) {
+  store.version = 3;
+
+  store.order = (store.order || Object.keys(store.accounts || {})).filter(function (id) {
+    return store.accounts[id];
+  });
+
+  return writeStore(JSON.stringify(store), storeKey);
+}
+
+function pick(arr, seed) {
+  return arr[Math.abs(seed || 0) % arr.length];
+}
+
+function buildUA(baseUA, seed) {
+  const iosVer = pick(IOS_VERSIONS, seed);
+  const scale = pick(IOS_SCALES, seed + 1);
+  const model = pick(IPHONE_MODELS, seed + 2);
+  const cfn = pick(CFN_VERS, seed + 3);
+  const darwin = pick(DARWIN_VERS, seed + 4);
+
+  if (baseUA && typeof baseUA === "string") {
+    let ua = baseUA;
+    let changed = false;
+
+    const replacements = [
+      [/iOS \d+(\.\d+){0,2}/, "iOS " + iosVer],
+      [/Scale\/\d+(\.\d+)?/, "Scale/" + scale],
+      [/iPhone\d+,\d+/, model],
+      [/CFNetwork\/[\d.]+/, "CFNetwork/" + cfn],
+      [/Darwin\/[\d.]+/, "Darwin/" + darwin]
+    ];
+
+    replacements.forEach(function (r) {
+      if (r[0].test(ua)) {
+        ua = ua.replace(r[0], r[1]);
+        changed = true;
+      }
+    });
+
+    if (changed) return ua;
+  }
+
+  return "WeTalk/30.6.0 (com.innovationworks.wetalk; build:28; iOS " + iosVer + ") Alamofire/5.4.3";
+}
+
+function buildSignedParamsRaw(capture) {
+  const params = {};
+
+  Object.keys((capture && capture.paramsRaw) || {}).forEach(function (key) {
+    if (key !== "sign" && key !== "signDate") {
+      params[key] = capture.paramsRaw[key];
+    }
+  });
+
+  params.signDate = getUTCSignDate();
+
+  const signBase = Object.keys(params)
+    .sort()
+    .map(function (key) {
+      return key + "=" + params[key];
+    })
+    .join("&");
+
+  params.sign = md5(signBase + SECRET);
+
+  return params;
+}
+
+function buildUrl(path, capture) {
+  const params = buildSignedParamsRaw(capture);
+
+  const query = Object.keys(params)
+    .map(function (key) {
+      return key + "=" + encodeURIComponent(params[key]);
+    })
+    .join("&");
+
+  return "https://" + API_HOST + "/app/" + path + "?" + query;
+}
+
+function buildHeaders(capture, ua) {
+  const headers = {};
+
+  Object.keys((capture && capture.headers) || {}).forEach(function (k) {
+    const lower = String(k).toLowerCase();
+
+    if (lower !== "content-length" && lower !== "user-agent" && k.charAt(0) !== ":") {
+      headers[k] = capture.headers[k];
+    }
+  });
+
+  headers.Host = API_HOST;
+  headers.Accept = headers.Accept || headers.accept || "application/json";
+  headers["User-Agent"] = ua;
+
+  return headers;
 }
 
 function fetchRequest(options) {
@@ -104,528 +451,76 @@ function fetchRequest(options) {
   });
 }
 
-/* =========================
-   MD5
-========================= */
-
-function MD5(string) {
-  function RotateLeft(lValue, iShiftBits) {
-    return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits));
-  }
-
-  function AddUnsigned(lX, lY) {
-    const lX4 = lX & 0x40000000;
-    const lY4 = lY & 0x40000000;
-    const lX8 = lX & 0x80000000;
-    const lY8 = lY & 0x80000000;
-    const lResult = (lX & 0x3FFFFFFF) + (lY & 0x3FFFFFFF);
-
-    if (lX4 & lY4) {
-      return lResult ^ 0x80000000 ^ lX8 ^ lY8;
-    }
-
-    if (lX4 | lY4) {
-      if (lResult & 0x40000000) {
-        return lResult ^ 0xC0000000 ^ lX8 ^ lY8;
-      } else {
-        return lResult ^ 0x40000000 ^ lX8 ^ lY8;
-      }
-    }
-
-    return lResult ^ lX8 ^ lY8;
-  }
-
-  function F(x, y, z) {
-    return (x & y) | ((~x) & z);
-  }
-
-  function G(x, y, z) {
-    return (x & z) | (y & (~z));
-  }
-
-  function H(x, y, z) {
-    return x ^ y ^ z;
-  }
-
-  function I(x, y, z) {
-    return y ^ (x | (~z));
-  }
-
-  function FF(a, b, c, d, x, s, ac) {
-    a = AddUnsigned(a, AddUnsigned(AddUnsigned(F(b, c, d), x), ac));
-    return AddUnsigned(RotateLeft(a, s), b);
-  }
-
-  function GG(a, b, c, d, x, s, ac) {
-    a = AddUnsigned(a, AddUnsigned(AddUnsigned(G(b, c, d), x), ac));
-    return AddUnsigned(RotateLeft(a, s), b);
-  }
-
-  function HH(a, b, c, d, x, s, ac) {
-    a = AddUnsigned(a, AddUnsigned(AddUnsigned(H(b, c, d), x), ac));
-    return AddUnsigned(RotateLeft(a, s), b);
-  }
-
-  function II(a, b, c, d, x, s, ac) {
-    a = AddUnsigned(a, AddUnsigned(AddUnsigned(I(b, c, d), x), ac));
-    return AddUnsigned(RotateLeft(a, s), b);
-  }
-
-  function ConvertToWordArray(str) {
-    const lMessageLength = str.length;
-    const lNumberOfWordsTemp1 = lMessageLength + 8;
-    const lNumberOfWordsTemp2 = (lNumberOfWordsTemp1 - (lNumberOfWordsTemp1 % 64)) / 64;
-    const lNumberOfWords = (lNumberOfWordsTemp2 + 1) * 16;
-    const lWordArray = Array(lNumberOfWords - 1).fill(0);
-
-    let lBytePosition = 0;
-    let lByteCount = 0;
-
-    while (lByteCount < lMessageLength) {
-      const lWordCount = (lByteCount - (lByteCount % 4)) / 4;
-      lBytePosition = (lByteCount % 4) * 8;
-      lWordArray[lWordCount] |= str.charCodeAt(lByteCount) << lBytePosition;
-      lByteCount++;
-    }
-
-    const lWordCount = (lByteCount - (lByteCount % 4)) / 4;
-    lBytePosition = (lByteCount % 4) * 8;
-    lWordArray[lWordCount] |= 0x80 << lBytePosition;
-    lWordArray[lNumberOfWords - 2] = lMessageLength << 3;
-    lWordArray[lNumberOfWords - 1] = lMessageLength >>> 29;
-
-    return lWordArray;
-  }
-
-  function WordToHex(lValue) {
-    let WordToHexValue = '';
-
-    for (let lCount = 0; lCount <= 3; lCount++) {
-      const lByte = (lValue >>> (lCount * 8)) & 255;
-      const WordToHexValueTemp = '0' + lByte.toString(16);
-      WordToHexValue += WordToHexValueTemp.substr(WordToHexValueTemp.length - 2, 2);
-    }
-
-    return WordToHexValue;
-  }
-
-  const x = ConvertToWordArray(string);
-
-  let a = 0x67452301;
-  let b = 0xEFCDAB89;
-  let c = 0x98BADCFE;
-  let d = 0x10325476;
-
-  const S11 = 7;
-  const S12 = 12;
-  const S13 = 17;
-  const S14 = 22;
-
-  const S21 = 5;
-  const S22 = 9;
-  const S23 = 14;
-  const S24 = 20;
-
-  const S31 = 4;
-  const S32 = 11;
-  const S33 = 16;
-  const S34 = 23;
-
-  const S41 = 6;
-  const S42 = 10;
-  const S43 = 15;
-  const S44 = 21;
-
-  for (let k = 0; k < x.length; k += 16) {
-    const AA = a;
-    const BB = b;
-    const CC = c;
-    const DD = d;
-
-    a = FF(a, b, c, d, x[k + 0], S11, 0xD76AA478);
-    d = FF(d, a, b, c, x[k + 1], S12, 0xE8C7B756);
-    c = FF(c, d, a, b, x[k + 2], S13, 0x242070DB);
-    b = FF(b, c, d, a, x[k + 3], S14, 0xC1BDCEEE);
-    a = FF(a, b, c, d, x[k + 4], S11, 0xF57C0FAF);
-    d = FF(d, a, b, c, x[k + 5], S12, 0x4787C62A);
-    c = FF(c, d, a, b, x[k + 6], S13, 0xA8304613);
-    b = FF(b, c, d, a, x[k + 7], S14, 0xFD469501);
-    a = FF(a, b, c, d, x[k + 8], S11, 0x698098D8);
-    d = FF(d, a, b, c, x[k + 9], S12, 0x8B44F7AF);
-    c = FF(c, d, a, b, x[k + 10], S13, 0xFFFF5BB1);
-    b = FF(b, c, d, a, x[k + 11], S14, 0x895CD7BE);
-    a = FF(a, b, c, d, x[k + 12], S11, 0x6B901122);
-    d = FF(d, a, b, c, x[k + 13], S12, 0xFD987193);
-    c = FF(c, d, a, b, x[k + 14], S13, 0xA679438E);
-    b = FF(b, c, d, a, x[k + 15], S14, 0x49B40821);
-
-    a = GG(a, b, c, d, x[k + 1], S21, 0xF61E2562);
-    d = GG(d, a, b, c, x[k + 6], S22, 0xC040B340);
-    c = GG(c, d, a, b, x[k + 11], S23, 0x265E5A51);
-    b = GG(b, c, d, a, x[k + 0], S24, 0xE9B6C7AA);
-    a = GG(a, b, c, d, x[k + 5], S21, 0xD62F105D);
-    d = GG(d, a, b, c, x[k + 10], S22, 0x02441453);
-    c = GG(c, d, a, b, x[k + 15], S23, 0xD8A1E681);
-    b = GG(b, c, d, a, x[k + 4], S24, 0xE7D3FBC8);
-    a = GG(a, b, c, d, x[k + 9], S21, 0x21E1CDE6);
-    d = GG(d, a, b, c, x[k + 14], S22, 0xC33707D6);
-    c = GG(c, d, a, b, x[k + 3], S23, 0xF4D50D87);
-    b = GG(b, c, d, a, x[k + 8], S24, 0x455A14ED);
-    a = GG(a, b, c, d, x[k + 13], S21, 0xA9E3E905);
-    d = GG(d, a, b, c, x[k + 2], S22, 0xFCEFA3F8);
-    c = GG(c, d, a, b, x[k + 7], S23, 0x676F02D9);
-    b = GG(b, c, d, a, x[k + 12], S24, 0x8D2A4C8A);
-
-    a = HH(a, b, c, d, x[k + 5], S31, 0xFFFA3942);
-    d = HH(d, a, b, c, x[k + 8], S32, 0x8771F681);
-    c = HH(c, d, a, b, x[k + 11], S33, 0x6D9D6122);
-    b = HH(b, c, d, a, x[k + 14], S34, 0xFDE5380C);
-    a = HH(a, b, c, d, x[k + 1], S31, 0xA4BEEA44);
-    d = HH(d, a, b, c, x[k + 4], S32, 0x4BDECFA9);
-    c = HH(c, d, a, b, x[k + 7], S33, 0xF6BB4B60);
-    b = HH(b, c, d, a, x[k + 10], S34, 0xBEBFBC70);
-    a = HH(a, b, c, d, x[k + 13], S31, 0x289B7EC6);
-    d = HH(d, a, b, c, x[k + 0], S32, 0xEAA127FA);
-    c = HH(c, d, a, b, x[k + 3], S33, 0xD4EF3085);
-    b = HH(b, c, d, a, x[k + 6], S34, 0x04881D05);
-    a = HH(a, b, c, d, x[k + 9], S31, 0xD9D4D039);
-    d = HH(d, a, b, c, x[k + 12], S32, 0xE6DB99E5);
-    c = HH(c, d, a, b, x[k + 15], S33, 0x1FA27CF8);
-    b = HH(b, c, d, a, x[k + 2], S34, 0xC4AC5665);
-
-    a = II(a, b, c, d, x[k + 0], S41, 0xF4292244);
-    d = II(d, a, b, c, x[k + 7], S42, 0x432AFF97);
-    c = II(c, d, a, b, x[k + 14], S43, 0xAB9423A7);
-    b = II(b, c, d, a, x[k + 5], S44, 0xFC93A039);
-    a = II(a, b, c, d, x[k + 12], S41, 0x655B59C3);
-    d = II(d, a, b, c, x[k + 3], S42, 0x8F0CCC92);
-    c = II(c, d, a, b, x[k + 10], S43, 0xFFEFF47D);
-    b = II(b, c, d, a, x[k + 1], S44, 0x85845DD1);
-    a = II(a, b, c, d, x[k + 8], S41, 0x6FA87E4F);
-    d = II(d, a, b, c, x[k + 15], S42, 0xFE2CE6E0);
-    c = II(c, d, a, b, x[k + 6], S43, 0xA3014314);
-    b = II(b, c, d, a, x[k + 13], S44, 0x4E0811A1);
-    a = II(a, b, c, d, x[k + 4], S41, 0xF7537E82);
-    d = II(d, a, b, c, x[k + 11], S42, 0xBD3AF235);
-    c = II(c, d, a, b, x[k + 2], S43, 0x2AD7D2BB);
-    b = II(b, c, d, a, x[k + 9], S44, 0xEB86D391);
-
-    a = AddUnsigned(a, AA);
-    b = AddUnsigned(b, BB);
-    c = AddUnsigned(c, CC);
-    d = AddUnsigned(d, DD);
-  }
-
-  return (WordToHex(a) + WordToHex(b) + WordToHex(c) + WordToHex(d)).toLowerCase();
-}
-
-/* =========================
-   工具函数
-========================= */
-
-function getUTCSignDate() {
-  const now = new Date();
-  const pad = function (n) {
-    return String(n).padStart(2, '0');
-  };
-
-  return now.getUTCFullYear()
-    + '-'
-    + pad(now.getUTCMonth() + 1)
-    + '-'
-    + pad(now.getUTCDate())
-    + ' '
-    + pad(now.getUTCHours())
-    + ':'
-    + pad(now.getUTCMinutes())
-    + ':'
-    + pad(now.getUTCSeconds());
-}
-
-function normalizeHeaderNameMap(headers) {
-  const out = {};
-
-  Object.keys(headers || {}).forEach(function (k) {
-    out[k] = headers[k];
-  });
-
-  return out;
-}
-
-function parseRawQuery(url) {
-  const query = (url.split('?')[1] || '').split('#')[0];
-  const rawMap = {};
-
-  query.split('&').forEach(function (pair) {
-    if (!pair) return;
-
-    const idx = pair.indexOf('=');
-    if (idx < 0) return;
-
-    const k = pair.slice(0, idx);
-    const v = pair.slice(idx + 1);
-
-    rawMap[k] = v;
-  });
-
-  return rawMap;
-}
-
-function safeDecode(v) {
-  if (v == null) return '';
-
-  try {
-    return decodeURIComponent(String(v));
-  } catch (e) {
-    return String(v);
-  }
-}
-
-function emailKeyOf(paramsRaw) {
-  const raw = (paramsRaw || {}).email;
-
-  if (!raw) return '';
-
-  return safeDecode(raw).trim().toLowerCase();
-}
-
-function fingerprintOf(paramsRaw) {
-  const email = emailKeyOf(paramsRaw);
-
-  if (email) return email;
-
-  const drop = {
-    sign: 1,
-    signDate: 1,
-    timestamp: 1,
-    ts: 1,
-    nonce: 1,
-    random: 1,
-    reqTime: 1,
-    reqId: 1,
-    requestId: 1
-  };
-
-  const base = Object.keys(paramsRaw || {})
-    .filter(function (k) {
-      return !drop[k];
-    })
-    .sort()
-    .map(function (k) {
-      return k + '=' + paramsRaw[k];
-    })
-    .join('&');
-
-  return 'fp_' + MD5(base).slice(0, 12);
-}
-
-function migrateStore(store) {
-  if (!store || !store.accounts) return store;
-
-  const newAccounts = {};
-  const newOrder = [];
-  let migrated = false;
-
-  (store.order || Object.keys(store.accounts)).forEach(function (oldId) {
-    const acc = store.accounts[oldId];
-
-    if (!acc) return;
-
-    const email = emailKeyOf(acc.capture && acc.capture.paramsRaw);
-    const newId = email || oldId;
-
-    if (newId !== oldId) migrated = true;
-
-    const prev = newAccounts[newId];
-
-    if (!prev || (acc.updatedAt || 0) >= (prev.updatedAt || 0)) {
-      newAccounts[newId] = Object.assign({}, acc, {
-        id: newId,
-        alias: acc.alias || email || newId
-      });
-
-      if (newOrder.indexOf(newId) < 0) {
-        newOrder.push(newId);
-      }
-    }
-  });
-
-  if (migrated) {
-    store.accounts = newAccounts;
-    store.order = newOrder;
-  }
-
-  return store;
-}
-
-function loadStore() {
-  const raw = readStore(storeKey);
-
-  if (!raw) {
-    return {
-      version: 2,
-      accounts: {},
-      order: []
-    };
-  }
-
-  try {
-    const obj = JSON.parse(raw);
-
-    if (!obj.accounts) {
-      obj.accounts = {};
-    }
-
-    if (!Array.isArray(obj.order)) {
-      obj.order = Object.keys(obj.accounts);
-    }
-
-    return migrateStore(obj);
-  } catch (e) {
-    return {
-      version: 2,
-      accounts: {},
-      order: []
-    };
-  }
-}
-
-function saveStore(store) {
-  writeStore(JSON.stringify(store), storeKey);
-}
-
-function pickItem(arr, seed) {
-  return arr[seed % arr.length];
-}
-
-function buildUA(baseUA, seed) {
-  const iosVer = pickItem(IOS_VERSIONS, seed);
-  const scale = pickItem(IOS_SCALES, seed + 1);
-  const model = pickItem(IPHONE_MODELS, seed + 2);
-  const cfn = pickItem(CFN_VERS, seed + 3);
-  const darwin = pickItem(DARWIN_VERS, seed + 4);
-
-  if (baseUA && typeof baseUA === 'string') {
-    let ua = baseUA;
-    let changed = false;
-
-    if (/iOS \d+(\.\d+){0,2}/.test(ua)) {
-      ua = ua.replace(/iOS \d+(\.\d+){0,2}/, 'iOS ' + iosVer);
-      changed = true;
-    }
-
-    if (/Scale\/\d+(\.\d+)?/.test(ua)) {
-      ua = ua.replace(/Scale\/\d+(\.\d+)?/, 'Scale/' + scale);
-      changed = true;
-    }
-
-    if (/iPhone\d+,\d+/.test(ua)) {
-      ua = ua.replace(/iPhone\d+,\d+/, model);
-      changed = true;
-    }
-
-    if (/CFNetwork\/[\d.]+/.test(ua)) {
-      ua = ua.replace(/CFNetwork\/[\d.]+/, 'CFNetwork/' + cfn);
-      changed = true;
-    }
-
-    if (/Darwin\/[\d.]+/.test(ua)) {
-      ua = ua.replace(/Darwin\/[\d.]+/, 'Darwin/' + darwin);
-      changed = true;
-    }
-
-    if (changed) {
-      return ua;
-    }
-  }
-
-  return 'WeTalk/30.6.0 (com.innovationworks.wetalk; build:28; iOS '
-    + iosVer
-    + ') Alamofire/5.4.3';
-}
-
-function buildSignedParamsRaw(capture) {
-  const params = {};
-
-  Object.keys(capture.paramsRaw || {}).forEach(function (k) {
-    if (k !== 'sign' && k !== 'signDate') {
-      params[k] = capture.paramsRaw[k];
-    }
-  });
-
-  params.signDate = getUTCSignDate();
-
-  const signBase = Object.keys(params)
-    .sort()
-    .map(function (k) {
-      return k + '=' + params[k];
-    })
-    .join('&');
-
-  params.sign = MD5(signBase + SECRET);
-
-  return params;
-}
-
-function buildUrl(path, capture) {
-  const params = buildSignedParamsRaw(capture);
-
-  const qs = Object.keys(params)
-    .map(function (k) {
-      return k + '=' + encodeURIComponent(params[k]);
-    })
-    .join('&');
-
-  return 'https://' + API_HOST + '/app/' + path + '?' + qs;
-}
-
-function cloneHeaders(headers) {
-  const out = {};
-
-  Object.keys(headers || {}).forEach(function (k) {
-    out[k] = headers[k];
-  });
-
-  return out;
-}
-
-function buildHeaders(capture, ua) {
-  const headers = cloneHeaders(capture.headers || {});
-
-  delete headers['Content-Length'];
-  delete headers['content-length'];
-  delete headers[':authority'];
-  delete headers[':method'];
-  delete headers[':path'];
-  delete headers[':scheme'];
-
-  headers['Host'] = API_HOST;
-  headers['Accept'] = headers['Accept'] || 'application/json';
-
-  Object.keys(headers).forEach(function (k) {
-    if (k.toLowerCase() === 'user-agent') {
-      delete headers[k];
-    }
-  });
-
-  headers['User-Agent'] = ua;
-
-  return headers;
-}
-
 function sleep(ms) {
   return new Promise(function (resolve) {
     setTimeout(resolve, ms);
   });
 }
 
-/* =========================
-   主任务逻辑
-========================= */
+function splitList(value) {
+  return String(value || "")
+    .split(/[\n,，;；]+/)
+    .map(function (s) {
+      return s.trim();
+    })
+    .filter(Boolean);
+}
+
+function matchAccountIds(store, tokens) {
+  const allIds = (store.order || []).filter(function (id) {
+    const acc = store.accounts[id];
+    return acc && acc.capture && acc.capture.paramsRaw;
+  });
+
+  if (!tokens.length) return allIds;
+
+  const result = [];
+
+  tokens.forEach(function (tokenRaw) {
+    const token = String(tokenRaw || "").trim().toLowerCase();
+
+    if (!token) return;
+
+    if (/^\d+$/.test(token)) {
+      const idx = Number(token);
+      if (idx >= 1 && idx <= allIds.length && result.indexOf(allIds[idx - 1]) < 0) {
+        result.push(allIds[idx - 1]);
+      }
+      return;
+    }
+
+    allIds.forEach(function (id) {
+      const acc = store.accounts[id] || {};
+
+      const candidates = [id, acc.id, acc.email, acc.alias]
+        .filter(Boolean)
+        .map(function (v) {
+          return String(v).trim().toLowerCase();
+        });
+
+      if (candidates.indexOf(token) >= 0 && result.indexOf(id) < 0) {
+        result.push(id);
+      }
+    });
+  });
+
+  return result;
+}
+
+function parseJsonSafe(text) {
+  try {
+    return JSON.parse(text || "{}");
+  } catch (e) {
+    return {
+      retcode: -1,
+      retmsg: "响应不是 JSON：" + String(text || "").slice(0, 120)
+    };
+  }
+}
 
 function runAccount(acc, index, total) {
-  const tag = '[账号' + (index + 1) + '/' + total + ' ' + (acc.alias || acc.email || acc.id) + ']';
-  const ua = buildUA(acc.baseUA, acc.uaSeed);
+  const tag = "[账号" + (index + 1) + "/" + total + " " + (acc.alias || acc.email || acc.id) + "]";
+  const ua = buildUA(acc.baseUA, acc.uaSeed || 0);
   const headers = buildHeaders(acc.capture, ua);
   const msgs = [tag];
 
@@ -634,215 +529,109 @@ function runAccount(acc, index, total) {
       url: buildUrl(path, acc.capture),
       headers: headers,
       timeout: 10
+    }).then(function (res) {
+      return parseJsonSafe(res.body);
     });
   }
 
-  function doVideoLoop(count) {
-    let i = 0;
-
-    function next() {
-      if (i >= count) {
-        return Promise.resolve();
+  return fetchApi("queryBalanceAndBonus")
+    .then(function (d) {
+      if (d.retcode === 0) {
+        msgs.push("余额：" + ((d.result && d.result.balance) || "?") + " Coins");
+      } else {
+        msgs.push("⚠️ 查询：" + (d.retmsg || "失败"));
       }
 
-      return new Promise(function (resolve) {
-        setTimeout(function () {
-          i++;
-
-          fetchApi('videoBonus')
-            .then(function (res) {
-              try {
-                const d = JSON.parse(res.body);
-
-                if (d.retcode === 0) {
-                  const bonus = d.result && d.result.bonus ? d.result.bonus : '?';
-                  msgs.push('视频' + i + '：+' + bonus + ' Coins');
-                  resolve(next());
-                } else {
-                  msgs.push('⏸ 视频' + i + '：' + d.retmsg);
-                  resolve();
-                }
-              } catch (e) {
-                msgs.push('❌ 视频' + i + '：解析失败');
-                resolve();
-              }
-            })
-            .catch(function (err) {
-              msgs.push('❌ 视频' + i + '：' + (err.error || '请求失败'));
-              resolve();
-            });
-        }, i === 0 ? 1500 : VIDEO_DELAY);
-      });
-    }
-
-    return next();
-  }
-
-  return fetchApi('queryBalanceAndBonus')
-    .then(function (res) {
-      try {
-        const d = JSON.parse(res.body);
-
-        if (d.retcode === 0) {
-          msgs.push('余额：' + d.result.balance + ' Coins');
-        } else {
-          msgs.push('⚠️ 查询：' + d.retmsg);
-        }
-      } catch (e) {
-        msgs.push('❌ 查询：解析失败');
-      }
-
-      return fetchApi('checkIn');
+      return fetchApi("checkIn");
+    }, function (err) {
+      msgs.push("❌ 查询：" + (err.message || err.error || String(err)));
+      return fetchApi("checkIn");
     })
-    .then(function (res) {
-      try {
-        const d = JSON.parse(res.body);
-
-        if (d.retcode === 0) {
-          const hint = ((d.result && d.result.bonusHint) || d.retmsg || '').replace(/\n/g, ' ');
-          msgs.push('✅ 签到：' + hint);
-        } else {
-          msgs.push('⚠️ 签到：' + d.retmsg);
-        }
-      } catch (e) {
-        msgs.push('❌ 签到：解析失败');
+    .then(function (d) {
+      if (d.retcode === 0) {
+        const hint = String((d.result && d.result.bonusHint) || d.retmsg || "成功").replace(/\n/g, " ");
+        msgs.push("✅ 签到：" + hint);
+      } else {
+        msgs.push("⚠️ 签到：" + (d.retmsg || "失败"));
       }
-
-      return doVideoLoop(MAX_VIDEO);
+    }, function (err) {
+      msgs.push("❌ 签到：" + (err.message || err.error || String(err)));
     })
     .then(function () {
-      return fetchApi('queryBalanceAndBonus');
-    })
-    .then(function (res) {
-      try {
-        const d = JSON.parse(res.body);
+      let chain = Promise.resolve();
 
-        if (d.retcode === 0) {
-          msgs.push('最新余额：' + d.result.balance + ' Coins');
+      for (let i = 1; i <= MAX_VIDEO; i++) {
+        chain = chain.then(function () {
+          return sleep(i === 1 ? 1500 : VIDEO_DELAY).then(function () {
+            return fetchApi("videoBonus").then(function (d) {
+              if (d.retcode === 0) {
+                msgs.push("视频" + i + "：+" + ((d.result && d.result.bonus) || "?") + " Coins");
+              } else {
+                msgs.push("⏸ 视频" + i + "：" + (d.retmsg || "停止"));
+                throw new Error("__STOP_VIDEO__");
+              }
+            });
+          });
+        });
+      }
+
+      return chain.catch(function (err) {
+        if (String(err.message || err) !== "__STOP_VIDEO__") {
+          msgs.push("❌ 视频：" + (err.message || err.error || String(err)));
         }
-      } catch (e) {}
-
-      return msgs.join('\n');
+      });
+    })
+    .then(function () {
+      return fetchApi("queryBalanceAndBonus").then(function (d) {
+        if (d.retcode === 0) {
+          msgs.push("最新余额：" + ((d.result && d.result.balance) || "?") + " Coins");
+        }
+      }, function () {});
+    })
+    .then(function () {
+      return msgs.join("\n");
     })
     .catch(function (err) {
-      msgs.push('❌ 异常：' + (err.error || String(err)));
-      return msgs.join('\n');
+      msgs.push("❌ 异常：" + (err.message || err.error || String(err)));
+      return msgs.join("\n");
     });
 }
 
-/* =========================
-   入口：抓包 or 定时
-========================= */
-
-if (typeof $request !== 'undefined' && $request) {
-  const paramsRaw = parseRawQuery($request.url);
-  const headersMap = normalizeHeaderNameMap($request.headers || {});
-
-  let baseUA = '';
-
-  Object.keys(headersMap).forEach(function (k) {
-    if (k.toLowerCase() === 'user-agent') {
-      baseUA = headersMap[k];
-    }
-  });
-
-  const email = emailKeyOf(paramsRaw);
-
-  if (!email) {
-    notify(
-      '⚠️ 抓取失败',
-      '请求里未取到 email 参数，无法识别账号。请确认已登录后再触发抓包。'
-    );
-
-    $done({});
-  } else {
-    const store = loadStore();
-    const accId = email;
-    const now = Date.now();
-    const existed = !!store.accounts[accId];
-    const uaSeed = existed ? store.accounts[accId].uaSeed : store.order.length;
-    const alias = existed ? (store.accounts[accId].alias || email) : email;
-
-    store.accounts[accId] = {
-      id: accId,
-      email: email,
-      alias: alias,
-      uaSeed: uaSeed,
-      baseUA: baseUA,
-      capture: {
-        url: $request.url,
-        paramsRaw: paramsRaw,
-        headers: headersMap
-      },
-      createdAt: existed ? store.accounts[accId].createdAt : now,
-      updatedAt: now
-    };
-
-    if (!existed) {
-      store.order.push(accId);
-    }
-
-    saveStore(store);
-
-    const total = store.order.length;
-
-    notify(
-      existed ? '账号参数已更新' : '✅ 新账号已入库',
-      email + '\n当前账号总数：' + total
-    );
-
-    console.log(
-      '〖' + scriptName + '〗'
-      + (existed ? 'update' : 'add')
-      + ' account '
-      + email
-    );
-
-    $done({});
-  }
-} else {
+(function main() {
+  const args = parseArgs(typeof $argument !== "undefined" ? $argument : "");
   const store = loadStore();
-  const ids = store.order.filter(function (id) {
-    return store.accounts[id];
-  });
+
+  const ids = matchAccountIds(store, splitList(args.RUN_ACCOUNTS || ""));
 
   if (!ids.length) {
-    notify('⚠️ 未抓到任何账号', '请先打开 WeTalk 触发抓包');
+    notify("未抓到任何账号", "请先启用 MitM，打开 WeTalk 并触发 queryBalanceAndBonus 请求。");
     $done();
-  } else {
-    const total = ids.length;
-    const results = [];
-    let chain = Promise.resolve();
-
-    ids.forEach(function (id, idx) {
-      chain = chain
-        .then(function () {
-          return runAccount(store.accounts[id], idx, total);
-        })
-        .then(function (text) {
-          results.push(text);
-        })
-        .then(function () {
-          if (idx < ids.length - 1) {
-            return sleep(ACCOUNT_GAP);
-          }
-
-          return null;
-        });
-    });
-
-    chain
-      .then(function () {
-        notify('全部完成 (' + total + '个账号)', results.join('\n———\n'));
-        $done();
-      })
-      .catch(function (err) {
-        notify(
-          '❌ 任务异常',
-          results.join('\n———\n') + '\n' + (err.error || String(err))
-        );
-
-        $done();
-      });
+    return;
   }
-}
+
+  const results = [];
+
+  let chain = Promise.resolve();
+
+  ids.forEach(function (id, idx) {
+    chain = chain
+      .then(function () {
+        return runAccount(store.accounts[id], idx, ids.length);
+      })
+      .then(function (text) {
+        results.push(text);
+      })
+      .then(function () {
+        return idx < ids.length - 1 ? sleep(ACCOUNT_GAP) : null;
+      });
+  });
+
+  chain.then(function () {
+    saveStore(store);
+    notify("全部完成（" + ids.length + "个账号）", results.join("\n———\n").slice(0, 4000));
+    $done();
+  }).catch(function (err) {
+    notify("任务异常", results.join("\n———\n") + "\n" + (err.message || err.error || String(err)));
+    $done();
+  });
+})();
