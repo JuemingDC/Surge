@@ -1,6 +1,7 @@
 // WeTalk_account_manager.js for Surge
 // 用途：查看、删除、清空 WeTalk 已保存账号
-// 参数：DELETE_ACCOUNTS、DELETE_ALL
+// module 参数：DELETE_ACCOUNTS、DELETE_ALL
+// script 参数：ACTION=list / delete
 
 const scriptName = "WeTalk账号管理";
 const storeKey = "wetalk_accounts_v1";
@@ -86,7 +87,7 @@ function saveStore(store) {
 
 function splitList(value) {
   return String(value || "")
-    .split(/[\n,，;；]+/)
+    .split(/[\n,，,;；]+/)
     .map(function (s) {
       return s.trim();
     })
@@ -143,9 +144,11 @@ function matchAccountIds(store, tokens) {
 
     if (/^\d+$/.test(token)) {
       const idx = Number(token);
+
       if (idx >= 1 && idx <= ids.length && result.indexOf(ids[idx - 1]) < 0) {
         result.push(ids[idx - 1]);
       }
+
       return;
     }
 
@@ -176,14 +179,29 @@ function boolFromValue(value, fallback) {
 (function main() {
   const store = loadStore();
   const args = parseArgs(typeof $argument !== "undefined" ? $argument : "");
+  const action = String(args.ACTION || "list").trim().toLowerCase();
+
   const accountList = formatAccountList(store);
 
   if (typeof $input !== "undefined" && $input && $input.purpose === "panel") {
     $done({
       title: "WeTalk 账号：" + ((store.order || []).length) + " 个",
-      content: accountList + "\n\n删除：修改模块参数后手动运行「WeTalk 账号管理」。Panel 刷新不会执行删除。",
+      content:
+        accountList +
+        "\n\n删除方法：在模块参数 DELETE_ACCOUNTS 输入编号、邮箱、账号ID或别名，然后手动运行「WeTalk 删除账号」。\n清空全部：将 DELETE_ALL 改为 true 后运行「WeTalk 删除账号」。",
       style: (store.order || []).length ? "good" : "info"
     });
+    return;
+  }
+
+  if (action === "list") {
+    notify(
+      "当前账号：" + (store.order || []).length + " 个",
+      accountList +
+      "\n\n删除指定账号：\n1. 打开模块参数\n2. 在 DELETE_ACCOUNTS 输入编号、邮箱、账号ID或别名\n3. 保存模块\n4. 手动运行「WeTalk 删除账号」\n\n清空全部：DELETE_ALL=true 后运行「WeTalk 删除账号」。"
+    );
+
+    $done();
     return;
   }
 
@@ -201,7 +219,9 @@ function boolFromValue(value, fallback) {
 
     notify(
       "已清空全部账号",
-      "删除前账号数：" + count + "\n已执行清空。\n请把模块参数 DELETE_ALL 改回 false，避免下次误删。"
+      "删除前账号数：" + count +
+      "\n已执行清空。" +
+      "\n\n请把模块参数 DELETE_ALL 改回 false，避免下次误删。"
     );
 
     $done();
@@ -210,11 +230,10 @@ function boolFromValue(value, fallback) {
 
   if (!deleteTokens.length) {
     notify(
-      "当前账号：" + (store.order || []).length + " 个",
-      "DELETE_ACCOUNTS: " + (deleteInput || "(空)") +
-      "\nDELETE_ALL: " + String(args.DELETE_ALL || "(空)") +
-      "\n\n当前账号列表：\n" + accountList +
-      "\n\n删除方法：\n1. 在模块参数 DELETE_ACCOUNTS 填编号，例如 2\n2. 保存模块设置\n3. 手动运行「WeTalk 账号管理」\n4. 删除后清空 DELETE_ACCOUNTS"
+      "未输入删除账号",
+      "请先在模块参数 DELETE_ACCOUNTS 中输入要删除的账号。" +
+      "\n\n支持输入：\n- 编号，例如 1\n- 邮箱\n- 账号ID\n- alias" +
+      "\n\n当前账号列表：\n" + accountList
     );
 
     $done();
