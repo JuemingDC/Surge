@@ -266,6 +266,22 @@ function parseArgs(str) {
     }
   });
 
+  function parseUnifiedArgs(str) {
+  const raw = String(str || "").trim();
+
+  if (!raw) return {};
+
+  const obj = parseArgs(raw);
+
+  if (Object.keys(obj).length > 1 || raw.indexOf("=") >= 0) {
+    return obj;
+  }
+
+  return {
+    run: raw
+  };
+}
+
   return out;
 }
 
@@ -598,10 +614,10 @@ function runAccount(acc, index, total) {
 }
 
 (function main() {
-  const args = parseArgs(typeof $argument !== "undefined" ? $argument : "");
-  const store = loadStore();
+  const args = parseUnifiedArgs(typeof $argument !== "undefined" ? $argument : "");
+const store = loadStore();
 
-  const ids = matchAccountIds(store, splitList(args.RUN_ACCOUNTS || ""));
+const ids = matchAccountIds(store, splitList(args.run || args.RUN_ACCOUNTS || ""));
 
   if (!ids.length) {
     notify("未抓到任何账号", "请先启用 MitM，打开 WeTalk 并触发 queryBalanceAndBonus 请求。");
