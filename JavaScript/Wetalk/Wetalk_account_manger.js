@@ -87,7 +87,7 @@ function saveStore(store) {
 
 function splitList(value) {
   return String(value || "")
-    .split(/[\n,，,;；]+/)
+    .split(/[\n,，;；]+/)
     .map(function (s) {
       return s.trim();
     })
@@ -180,25 +180,23 @@ function boolFromValue(value, fallback) {
   const store = loadStore();
   const args = parseArgs(typeof $argument !== "undefined" ? $argument : "");
   const action = String(args.ACTION || "list").trim().toLowerCase();
-
   const accountList = formatAccountList(store);
-
-  if (typeof $input !== "undefined" && $input && $input.purpose === "panel") {
-    $done({
-      title: "WeTalk 账号：" + ((store.order || []).length) + " 个",
-      content:
-        accountList +
-        "\n\n删除方法：在模块参数 DELETE_ACCOUNTS 输入编号、邮箱、账号ID或别名，然后手动运行「WeTalk 删除账号」。\n清空全部：将 DELETE_ALL 改为 true 后运行「WeTalk 删除账号」。",
-      style: (store.order || []).length ? "good" : "info"
-    });
-    return;
-  }
 
   if (action === "list") {
     notify(
       "当前账号：" + (store.order || []).length + " 个",
       accountList +
       "\n\n删除指定账号：\n1. 打开模块参数\n2. 在 DELETE_ACCOUNTS 输入编号、邮箱、账号ID或别名\n3. 保存模块\n4. 手动运行「WeTalk 删除账号」\n\n清空全部：DELETE_ALL=true 后运行「WeTalk 删除账号」。"
+    );
+
+    $done();
+    return;
+  }
+
+  if (action !== "delete") {
+    notify(
+      "未知操作",
+      "当前 ACTION=" + action + "\n支持 ACTION=list 或 ACTION=delete。"
     );
 
     $done();
@@ -232,7 +230,7 @@ function boolFromValue(value, fallback) {
     notify(
       "未输入删除账号",
       "请先在模块参数 DELETE_ACCOUNTS 中输入要删除的账号。" +
-      "\n\n支持输入：\n- 编号，例如 1\n- 邮箱\n- 账号ID\n- alias" +
+      "\n\n支持输入：\n- 编号，例如 1\n- 多个编号，例如 1,2\n- 邮箱\n- 账号ID\n- alias" +
       "\n\n当前账号列表：\n" + accountList
     );
 
