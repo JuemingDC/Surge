@@ -1,5 +1,5 @@
 #!name=WeTalk 自动化签到+视频奖励
-#!desc=WeTalk 抓取账号参数后，定时执行签到与视频奖励任务；支持多账号、指定运行、账号查看、删除指定账号和清空账号。需启用 MitM 并安装证书。
+#!desc=WeTalk 抓取账号参数后，定时执行签到与视频奖励任务；支持多账号、指定运行、查看账号、删除账号和清空账号。需启用 MitM 并安装证书。
 #!author=TG@ZenMoFiShi, converted for Surge
 #!category=签到
 #!arguments=RUN_ACCOUNTS=&DELETE_ACCOUNTS=&DELETE_ALL=false
@@ -12,9 +12,6 @@ WeTalk 签到任务 = type=cron, cronexp="5 */6 * * *", script-path=https://raw.
 WeTalk 账号列表 = type=generic, script-path=https://raw.githubusercontent.com/JuemingDC/Surge/main/JavaScript/Wetalk/Wetalk_account_manager.js, timeout=30, script-update-interval=0, argument=ACTION=list
 
 WeTalk 删除账号 = type=generic, script-path=https://raw.githubusercontent.com/JuemingDC/Surge/main/JavaScript/Wetalk/Wetalk_account_manager.js, timeout=30, script-update-interval=0, argument=ACTION=delete&DELETE_ACCOUNTS=%DELETE_ACCOUNTS%&DELETE_ALL=%DELETE_ALL%
-
-[Panel]
-WeTalk 账号管理 = title="WeTalk 账号管理", content="刷新查看账号列表；删除账号请在模块参数 DELETE_ACCOUNTS 中输入编号、邮箱、账号ID或别名，然后手动运行「WeTalk 删除账号」。", style=info, script-name=WeTalk 账号列表
 
 [MITM]
 hostname = %APPEND% api.wetalkapp.com
