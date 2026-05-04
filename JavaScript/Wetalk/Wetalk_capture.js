@@ -1,177 +1,66 @@
-/*
- * WeTalk_capture.js
- * Surge http-request script
- */
+// WeTalk_Capture.js
+// Surge only
+// 用途：抓取 WeTalk queryBalanceAndBonus 请求参数并保存
 
-var SCRIPT_NAME = "WeTalk";
-var STORE_KEY = "wetalk_accounts_v1";
-
-function parseArgument() {
-  var raw = typeof $argument === "string" ? $argument : "";
-  var out = {};
-
-  raw.split("&").forEach(function(pair) {
-    if (!pair) return;
-
-    var idx = pair.indexOf("=");
-    var key = idx >= 0 ? pair.slice(0, idx) : pair;
-    var val = idx >= 0 ? pair.slice(idx + 1) : "";
-
-    try {
-      out[decodeURIComponent(key)] = decodeURIComponent(val.replace(/\+/g, "%20"));
-    } catch (e) {
-      out[key] = val;
-    }
-  });
-
-  return out;
-}
-
-function boolArg(args, key, fallback) {
-  var value = args[key];
-
-  if (value === undefined || value === null || value === "") {
-    return fallback;
-  }
-
-  var s = String(value).trim().toLowerCase();
-  return s === "true" || s === "1" || s === "yes" || s === "y";
-}
-
-function notify(subtitle, body) {
-  $notification.post(SCRIPT_NAME, subtitle || "", body || "");
-}
-
-function safeDecode(value) {
-  if (value === undefined || value === null) return "";
-
-  try {
-    return decodeURIComponent(String(value));
-  } catch (e) {
-    return String(value);
-  }
-}
+const scriptName = 'WeTalk';
+const storeKey = 'wetalk_accounts_v1';
 
 function parseRawQuery(url) {
-  var query = String(url || "").split("?")[1];
+  const query = (url.split('?')[1] || '').split('#')[0];
+  const rawMap = {};
 
-  if (!query) return {};
-
-  query = query.split("#")[0];
-
-  var out = {};
-
-  query.split("&").forEach(function(pair) {
+  query.split('&').forEach(pair => {
     if (!pair) return;
 
-    var idx = pair.indexOf("=");
+    const idx = pair.indexOf('=');
+    if (idx < 0) return;
 
-    if (idx < 0) {
-      out[pair] = "";
-    } else {
-      out[pair.slice(0, idx)] = pair.slice(idx + 1);
-    }
+    const k = pair.slice(0, idx);
+    const v = pair.slice(idx + 1);
+    rawMap[k] = v;
   });
 
-  return out;
+  return rawMap;
 }
 
-function getHeader(headers, name) {
-  var target = String(name || "").toLowerCase();
+function safeDecode(v) {
+  if (v == null) return '';
 
-  for (var key in headers) {
-    if (Object.prototype.hasOwnProperty.call(headers, key)) {
-      if (String(key).toLowerCase() === target) {
-        return String(headers[key] || "");
-      }
-    }
+  try {
+    return decodeURIComponent(String(v));
+  } catch (e) {
+    return String(v);
   }
-
-  return "";
 }
 
 function emailKeyOf(paramsRaw) {
-  var raw = paramsRaw && paramsRaw.email;
-  return raw ? safeDecode(raw).trim().toLowerCase() : "";
-}
+  const raw = (paramsRaw || {}).email;
+  if (!raw) return '';
 
-function simpleHash(input) {
-  var h = 2166136261;
-  var s = String(input || "");
-
-  for (var i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
-  }
-
-  return (h >>> 0).toString(16);
-}
-
-function fingerprintOf(paramsRaw) {
-  var email = emailKeyOf(paramsRaw);
-  if (email) return email;
-
-  var volatileKeys = {
-    sign: true,
-    signDate: true,
-    timestamp: true,
-    ts: true,
-    nonce: true,
-    random: true,
-    reqTime: true,
-    reqId: true,
-    requestId: true
-  };
-
-  var base = Object.keys(paramsRaw || {})
-    .filter(function(key) {
-      return !volatileKeys[key];
-    })
-    .sort()
-    .map(function(key) {
-      return key + "=" + paramsRaw[key];
-    })
-    .join("&");
-
-  return "fp_" + simpleHash(base);
+  return safeDecode(raw).trim().toLowerCase();
 }
 
 function loadStore() {
-  var raw = $persistentStore.read(STORE_KEY);
+  const raw = $persistentStore.read(storeKey);
 
   if (!raw) {
     return {
-      version: 3,
+      version: 2,
       accounts: {},
       order: []
     };
   }
 
   try {
-    var store = JSON.parse(raw);
+    const obj = JSON.parse(raw);
 
-    if (!store || typeof store !== "object") {
-      throw new Error("Invalid store");
-    }
+    if (!obj.accounts) obj.accounts = {};
+    if (!Array.isArray(obj.order)) obj.order = Object.keys(obj.accounts);
 
-    if (!store.accounts || typeof store.accounts !== "object") {
-      store.accounts = {};
-    }
-
-    if (!Array.isArray(store.order)) {
-      store.order = Object.keys(store.accounts);
-    }
-
-    store.order = store.order.filter(function(id) {
-      return store.accounts[id];
-    });
-
-    store.version = 3;
-
-    return store;
+    return obj;
   } catch (e) {
     return {
-      version: 3,
+      version: 2,
       accounts: {},
       order: []
     };
@@ -179,143 +68,90 @@ function loadStore() {
 }
 
 function saveStore(store) {
-  if (!store.accounts || typeof store.accounts !== "object") {
-    store.accounts = {};
-  }
+  return $persistentStore.write(JSON.stringify(store), storeKey);
+}
 
-  if (!Array.isArray(store.order)) {
-    store.order = Object.keys(store.accounts);
-  }
+function notify(subtitle, body) {
+  $notification.post(scriptName, subtitle || '', body || '');
+}
 
-  store.order = store.order.filter(function(id) {
-    return store.accounts[id];
+function normalizeHeaders(headers) {
+  const out = {};
+
+  Object.keys(headers || {}).forEach(k => {
+    out[k] = headers[k];
   });
 
-  store.version = 3;
-
-  return $persistentStore.write(JSON.stringify(store), STORE_KEY);
+  return out;
 }
 
-function maskAccount(text, showSensitive) {
-  var s = String(text || "");
+function getBaseUA(headers) {
+  let ua = '';
 
-  if (showSensitive) return s;
-
-  if (s.indexOf("@") < 0) {
-    return s.length > 12 ? s.slice(0, 6) + "..." + s.slice(-4) : s;
-  }
-
-  var parts = s.split("@");
-  var name = parts[0] || "";
-  var domain = parts[1] || "";
-
-  var maskedName =
-    name.length <= 2
-      ? (name[0] || "*") + "*"
-      : name.slice(0, 2) + "***" + name.slice(-1);
-
-  return maskedName + "@" + domain;
-}
-
-function formatAccountList(store, showSensitive) {
-  var ids = (store.order || []).filter(function(id) {
-    return store.accounts[id];
+  Object.keys(headers || {}).forEach(k => {
+    if (k.toLowerCase() === 'user-agent') {
+      ua = headers[k];
+    }
   });
 
-  if (!ids.length) {
-    return "No saved account.";
-  }
-
-  return ids
-    .map(function(id, index) {
-      var acc = store.accounts[id];
-      var label = acc.alias || acc.email || acc.id || id;
-      var display = maskAccount(label, showSensitive);
-      var updated = acc.updatedAt ? new Date(acc.updatedAt).toLocaleString() : "unknown";
-
-      return [
-        String(index + 1) + ". " + display,
-        "ID: " + maskAccount(id, showSensitive),
-        "Updated: " + updated
-      ].join("\n");
-    })
-    .join("\n\n");
+  return ua;
 }
 
-function main() {
-  var args = parseArgument();
-
-  if (!boolArg(args, "CAPTURE_ENABLED", true)) {
-    console.log("[WeTalk Capture] disabled");
+function captureAccount() {
+  if (typeof $request === 'undefined' || !$request || !$request.url) {
+    notify('抓取失败', '未检测到请求对象。');
     $done({});
     return;
   }
 
-  if (typeof $request === "undefined" || !$request || !$request.url) {
-    console.log("[WeTalk Capture] no request object");
-    notify("Capture Failed", "No request object. Please check script type.");
+  const paramsRaw = parseRawQuery($request.url);
+  const headers = normalizeHeaders($request.headers || {});
+  const baseUA = getBaseUA(headers);
+  const email = emailKeyOf(paramsRaw);
+
+  if (!email) {
+    notify('抓取失败', '请求中未取到 email 参数，请确认已登录 WeTalk 后重新触发。');
     $done({});
     return;
   }
 
-  console.log("[WeTalk Capture] matched url: " + $request.url);
+  const store = loadStore();
+  const now = Date.now();
+  const existed = !!store.accounts[email];
 
-  var paramsRaw = parseRawQuery($request.url);
-
-  if (!Object.keys(paramsRaw).length) {
-    console.log("[WeTalk Capture] no query parameters");
-    notify("Capture Failed", "No query parameters found.");
-    $done({});
-    return;
-  }
-
-  var headers = $request.headers || {};
-  var email = emailKeyOf(paramsRaw);
-  var accountId = email || fingerprintOf(paramsRaw);
-  var now = Date.now();
-
-  var store = loadStore();
-  var existed = !!store.accounts[accountId];
-  var previous = store.accounts[accountId] || {};
-
-  store.accounts[accountId] = {
-    id: accountId,
-    email: email,
-    alias: previous.alias || email || accountId,
-    uaSeed: Number.isInteger(previous.uaSeed) ? previous.uaSeed : store.order.length,
-    baseUA: getHeader(headers, "User-Agent"),
+  store.accounts[email] = {
+    id: email,
+    email,
+    alias: existed ? (store.accounts[email].alias || email) : email,
+    uaSeed: existed ? (store.accounts[email].uaSeed || 0) : store.order.length,
+    baseUA,
     capture: {
       url: $request.url,
-      paramsRaw: paramsRaw,
-      headers: headers
+      paramsRaw,
+      headers
     },
-    createdAt: previous.createdAt || now,
+    createdAt: existed ? store.accounts[email].createdAt : now,
     updatedAt: now
   };
 
-  if (!existed && store.order.indexOf(accountId) < 0) {
-    store.order.push(accountId);
+  if (!existed) {
+    store.order.push(email);
   }
 
-  var ok = saveStore(store);
-  var showSensitive = boolArg(args, "SHOW_SENSITIVE", false);
-  var list = formatAccountList(store, showSensitive);
-
-  console.log("[WeTalk Capture] saved: " + String(ok));
-  console.log("[WeTalk Capture] account count: " + store.order.length);
+  saveStore(store);
 
   notify(
-    existed ? "Account Updated" : "Account Captured",
-    "Saved: " + String(ok) + "\nCount: " + store.order.length + "\n\n" + list
+    existed ? '账号参数已更新' : '新账号已入库',
+    `${email}\n当前账号总数：${store.order.length}`
   );
 
+  console.log(`〖${scriptName}〗${existed ? 'update' : 'add'} account: ${email}`);
   $done({});
 }
 
 try {
-  main();
+  captureAccount();
 } catch (e) {
-  console.log("[WeTalk Capture] error: " + (e.message || String(e)));
-  notify("Capture Error", e.message || String(e));
+  notify('抓取脚本异常', String(e && e.stack ? e.stack : e));
   $done({});
 }
