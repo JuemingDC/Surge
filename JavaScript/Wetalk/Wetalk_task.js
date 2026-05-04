@@ -1,258 +1,198 @@
-// WeTalk_task.js for Surge
-// 用途：定时执行签到与视频奖励任务
-// 参数：RUN_ACCOUNTS 留空运行全部；可填编号、邮箱、账号ID或别名，多个用逗号/分号/换行分隔。
+/*
+ * WeTalk_task.js - Surge 定时任务脚本
+ * 类型：cron
+ */
 
-const scriptName = "WeTalk";
-const storeKey = "wetalk_accounts_v1";
-
+const SCRIPT_NAME = "WeTalk";
+const STORE_KEY = "wetalk_accounts_v1";
 const SECRET = "0fOiukQq7jXZV2GRi9LGlO";
 const API_HOST = "api.wetalkapp.com";
 
-const MAX_VIDEO = 5;
-const VIDEO_DELAY = 8000;
-const ACCOUNT_GAP = 3500;
+const IOS_VER = ["17.5.1", "17.6.1", "17.4.1", "18.0.1"];
+const MODELS = ["iPhone14,3", "iPhone15,3", "iPhone16,1", "iPhone14,7"];
 
-const IOS_VERSIONS = [
-  "17.5.1",
-  "17.6.1",
-  "17.4.1",
-  "17.2.1",
-  "16.7.8",
-  "17.6",
-  "17.3.1",
-  "18.0.1",
-  "17.1.2",
-  "16.6.1"
-];
+function MD5(s) {
+  function RL(v, n) { return (v << n) | (v >>> (32 - n)); }
 
-const IOS_SCALES = ["2.00", "3.00", "3.00", "2.00", "3.00"];
+  function AU(x, y) {
+    var x4 = x & 0x40000000;
+    var y4 = y & 0x40000000;
+    var x8 = x & 0x80000000;
+    var y8 = y & 0x80000000;
+    var r = (x & 0x3FFFFFFF) + (y & 0x3FFFFFFF);
 
-const IPHONE_MODELS = [
-  "iPhone14,3",
-  "iPhone13,3",
-  "iPhone15,3",
-  "iPhone16,1",
-  "iPhone14,7",
-  "iPhone13,2",
-  "iPhone15,2",
-  "iPhone12,1"
-];
+    if (x4 & y4) return r ^ 0x80000000 ^ x8 ^ y8;
 
-const CFN_VERS = [
-  "1410.0.3",
-  "1494.0.7",
-  "1568.100.1",
-  "1209.1",
-  "1474.0.4",
-  "1568.200.2"
-];
-
-const DARWIN_VERS = [
-  "22.6.0",
-  "23.5.0",
-  "23.6.0",
-  "24.0.0",
-  "22.4.0"
-];
-
-function md5(input) {
-  function cmn(q, a, b, x, s, t) {
-    return add32(rotl(add32(add32(a, q), add32(x, t)), s), b);
-  }
-
-  function ff(a, b, c, d, x, s, t) {
-    return cmn((b & c) | ((~b) & d), a, b, x, s, t);
-  }
-
-  function gg(a, b, c, d, x, s, t) {
-    return cmn((b & d) | (c & (~d)), a, b, x, s, t);
-  }
-
-  function hh(a, b, c, d, x, s, t) {
-    return cmn(b ^ c ^ d, a, b, x, s, t);
-  }
-
-  function ii(a, b, c, d, x, s, t) {
-    return cmn(c ^ (b | (~d)), a, b, x, s, t);
-  }
-
-  function rotl(x, c) {
-    return (x << c) | (x >>> (32 - c));
-  }
-
-  function add32(a, b) {
-    return (a + b) & 0xffffffff;
-  }
-
-  function md5blk(s) {
-    const md5blks = [];
-
-    for (let i = 0; i < 64; i += 4) {
-      md5blks[i >> 2] =
-        s.charCodeAt(i) +
-        (s.charCodeAt(i + 1) << 8) +
-        (s.charCodeAt(i + 2) << 16) +
-        (s.charCodeAt(i + 3) << 24);
+    if (x4 | y4) {
+      return (r & 0x40000000)
+        ? (r ^ 0xC0000000 ^ x8 ^ y8)
+        : (r ^ 0x40000000 ^ x8 ^ y8);
     }
 
-    return md5blks;
+    return r ^ x8 ^ y8;
   }
 
-  function md51(s) {
-    const n = s.length;
-    const state = [1732584193, -271733879, -1732584194, 271733878];
+  function F(x, y, z) { return (x & y) | ((~x) & z); }
+  function G(x, y, z) { return (x & z) | (y & (~z)); }
+  function H(x, y, z) { return x ^ y ^ z; }
+  function I(x, y, z) { return y ^ (x | (~z)); }
 
-    let i;
-
-    for (i = 64; i <= n; i += 64) {
-      md5cycle(state, md5blk(s.substring(i - 64, i)));
-    }
-
-    s = s.substring(i - 64);
-
-    let tail = new Array(16).fill(0);
-
-    for (i = 0; i < s.length; i++) {
-      tail[i >> 2] |= s.charCodeAt(i) << ((i % 4) << 3);
-    }
-
-    tail[i >> 2] |= 0x80 << ((i % 4) << 3);
-
-    if (i > 55) {
-      md5cycle(state, tail);
-      tail = new Array(16).fill(0);
-    }
-
-    const tmp = n * 8;
-    tail[14] = tmp & 0xffffffff;
-    tail[15] = (tmp / 0x100000000) | 0;
-
-    md5cycle(state, tail);
-
-    return state;
+  function FF(a, b, c, d, x, s, ac) {
+    a = AU(a, AU(AU(F(b, c, d), x), ac));
+    return AU(RL(a, s), b);
   }
 
-  function md5cycle(x, k) {
-    let a = x[0];
-    let b = x[1];
-    let c = x[2];
-    let d = x[3];
-
-    a = ff(a, b, c, d, k[0], 7, -680876936);
-    d = ff(d, a, b, c, k[1], 12, -389564586);
-    c = ff(c, d, a, b, k[2], 17, 606105819);
-    b = ff(b, c, d, a, k[3], 22, -1044525330);
-
-    a = ff(a, b, c, d, k[4], 7, -176418897);
-    d = ff(d, a, b, c, k[5], 12, 1200080426);
-    c = ff(c, d, a, b, k[6], 17, -1473231341);
-    b = ff(b, c, d, a, k[7], 22, -45705983);
-
-    a = ff(a, b, c, d, k[8], 7, 1770035416);
-    d = ff(d, a, b, c, k[9], 12, -1958414417);
-    c = ff(c, d, a, b, k[10], 17, -42063);
-    b = ff(b, c, d, a, k[11], 22, -1990404162);
-
-    a = ff(a, b, c, d, k[12], 7, 1804603682);
-    d = ff(d, a, b, c, k[13], 12, -40341101);
-    c = ff(c, d, a, b, k[14], 17, -1502002290);
-    b = ff(b, c, d, a, k[15], 22, 1236535329);
-
-    a = gg(a, b, c, d, k[1], 5, -165796510);
-    d = gg(d, a, b, c, k[6], 9, -1069501632);
-    c = gg(c, d, a, b, k[11], 14, 643717713);
-    b = gg(b, c, d, a, k[0], 20, -373897302);
-
-    a = gg(a, b, c, d, k[5], 5, -701558691);
-    d = gg(d, a, b, c, k[10], 9, 38016083);
-    c = gg(c, d, a, b, k[15], 14, -660478335);
-    b = gg(b, c, d, a, k[4], 20, -405537848);
-
-    a = gg(a, b, c, d, k[9], 5, 568446438);
-    d = gg(d, a, b, c, k[14], 9, -1019803690);
-    c = gg(c, d, a, b, k[3], 14, -187363961);
-    b = gg(b, c, d, a, k[8], 20, 1163531501);
-
-    a = gg(a, b, c, d, k[13], 5, -1444681467);
-    d = gg(d, a, b, c, k[2], 9, -51403784);
-    c = gg(c, d, a, b, k[7], 14, 1735328473);
-    b = gg(b, c, d, a, k[12], 20, -1926607734);
-
-    a = hh(a, b, c, d, k[5], 4, -378558);
-    d = hh(d, a, b, c, k[8], 11, -2022574463);
-    c = hh(c, d, a, b, k[11], 16, 1839030562);
-    b = hh(b, c, d, a, k[14], 23, -35309556);
-
-    a = hh(a, b, c, d, k[1], 4, -1530992060);
-    d = hh(d, a, b, c, k[4], 11, 1272893353);
-    c = hh(c, d, a, b, k[7], 16, -155497632);
-    b = hh(b, c, d, a, k[10], 23, -1094730640);
-
-    a = hh(a, b, c, d, k[13], 4, 681279174);
-    d = hh(d, a, b, c, k[0], 11, -358537222);
-    c = hh(c, d, a, b, k[3], 16, -722521979);
-    b = hh(b, c, d, a, k[6], 23, 76029189);
-
-    a = hh(a, b, c, d, k[9], 4, -640364487);
-    d = hh(d, a, b, c, k[12], 11, -421815835);
-    c = hh(c, d, a, b, k[15], 16, 530742520);
-    b = hh(b, c, d, a, k[2], 23, -995338651);
-
-    a = ii(a, b, c, d, k[0], 6, -198630844);
-    d = ii(d, a, b, c, k[7], 10, 1126891415);
-    c = ii(c, d, a, b, k[14], 15, -1416354905);
-    b = ii(b, c, d, a, k[5], 21, -57434055);
-
-    a = ii(a, b, c, d, k[12], 6, 1700485571);
-    d = ii(d, a, b, c, k[3], 10, -1894986606);
-    c = ii(c, d, a, b, k[10], 15, -1051523);
-    b = ii(b, c, d, a, k[1], 21, -2054922799);
-
-    a = ii(a, b, c, d, k[8], 6, 1873313359);
-    d = ii(d, a, b, c, k[15], 10, -30611744);
-    c = ii(c, d, a, b, k[6], 15, -1560198380);
-    b = ii(b, c, d, a, k[13], 21, 1309151649);
-
-    a = ii(a, b, c, d, k[4], 6, -145523070);
-    d = ii(d, a, b, c, k[11], 10, -1120210379);
-    c = ii(c, d, a, b, k[2], 15, 718787259);
-    b = ii(b, c, d, a, k[9], 21, -343485551);
-
-    x[0] = add32(a, x[0]);
-    x[1] = add32(b, x[1]);
-    x[2] = add32(c, x[2]);
-    x[3] = add32(d, x[3]);
+  function GG(a, b, c, d, x, s, ac) {
+    a = AU(a, AU(AU(G(b, c, d), x), ac));
+    return AU(RL(a, s), b);
   }
 
-  function rhex(n) {
-    let s = "";
+  function HH(a, b, c, d, x, s, ac) {
+    a = AU(a, AU(AU(H(b, c, d), x), ac));
+    return AU(RL(a, s), b);
+  }
 
-    for (let j = 0; j < 4; j++) {
-      s += ("0" + ((n >> (j * 8)) & 255).toString(16)).slice(-2);
+  function II(a, b, c, d, x, s, ac) {
+    a = AU(a, AU(AU(I(b, c, d), x), ac));
+    return AU(RL(a, s), b);
+  }
+
+  function CWA(str) {
+    var ml = str.length;
+    var t1 = ml + 8;
+    var t2 = (t1 - (t1 % 64)) / 64;
+    var nw = (t2 + 1) * 16;
+    var wa = Array(nw).fill(0);
+    var bp = 0;
+    var bc = 0;
+
+    while (bc < ml) {
+      var wc = (bc - (bc % 4)) / 4;
+      bp = (bc % 4) * 8;
+      wa[wc] |= str.charCodeAt(bc) << bp;
+      bc++;
     }
 
-    return s;
+    var wc2 = (bc - (bc % 4)) / 4;
+    bp = (bc % 4) * 8;
+    wa[wc2] |= 0x80 << bp;
+    wa[nw - 2] = ml << 3;
+    wa[nw - 1] = ml >>> 29;
+
+    return wa;
   }
 
-  return md51(String(input)).map(rhex).join("");
+  function W2H(v) {
+    var r = "";
+
+    for (var i = 0; i <= 3; i++) {
+      var b = (v >>> (i * 8)) & 255;
+      var t = "0" + b.toString(16);
+      r += t.substr(t.length - 2, 2);
+    }
+
+    return r;
+  }
+
+  var x = CWA(String(s));
+  var a = 0x67452301;
+  var b = 0xEFCDAB89;
+  var c = 0x98BADCFE;
+  var d = 0x10325476;
+
+  var S11 = 7, S12 = 12, S13 = 17, S14 = 22;
+  var S21 = 5, S22 = 9, S23 = 14, S24 = 20;
+  var S31 = 4, S32 = 11, S33 = 16, S34 = 23;
+  var S41 = 6, S42 = 10, S43 = 15, S44 = 21;
+
+  for (var k = 0; k < x.length; k += 16) {
+    var AA = a;
+    var BB = b;
+    var CC = c;
+    var DD = d;
+
+    a = FF(a, b, c, d, x[k + 0], S11, 0xD76AA478);
+    d = FF(d, a, b, c, x[k + 1], S12, 0xE8C7B756);
+    c = FF(c, d, a, b, x[k + 2], S13, 0x242070DB);
+    b = FF(b, c, d, a, x[k + 3], S14, 0xC1BDCEEE);
+    a = FF(a, b, c, d, x[k + 4], S11, 0xF57C0FAF);
+    d = FF(d, a, b, c, x[k + 5], S12, 0x4787C62A);
+    c = FF(c, d, a, b, x[k + 6], S13, 0xA8304613);
+    b = FF(b, c, d, a, x[k + 7], S14, 0xFD469501);
+    a = FF(a, b, c, d, x[k + 8], S11, 0x698098D8);
+    d = FF(d, a, b, c, x[k + 9], S12, 0x8B44F7AF);
+    c = FF(c, d, a, b, x[k + 10], S13, 0xFFFF5BB1);
+    b = FF(b, c, d, a, x[k + 11], S14, 0x895CD7BE);
+    a = FF(a, b, c, d, x[k + 12], S11, 0x6B901122);
+    d = FF(d, a, b, c, x[k + 13], S12, 0xFD987193);
+    c = FF(c, d, a, b, x[k + 14], S13, 0xA679438E);
+    b = FF(b, c, d, a, x[k + 15], S14, 0x49B40821);
+
+    a = GG(a, b, c, d, x[k + 1], S21, 0xF61E2562);
+    d = GG(d, a, b, c, x[k + 6], S22, 0xC040B340);
+    c = GG(c, d, a, b, x[k + 11], S23, 0x265E5A51);
+    b = GG(b, c, d, a, x[k + 0], S24, 0xE9B6C7AA);
+    a = GG(a, b, c, d, x[k + 5], S21, 0xD62F105D);
+    d = GG(d, a, b, c, x[k + 10], S22, 0x02441453);
+    c = GG(c, d, a, b, x[k + 15], S23, 0xD8A1E681);
+    b = GG(b, c, d, a, x[k + 4], S24, 0xE7D3FBC8);
+    a = GG(a, b, c, d, x[k + 9], S21, 0x21E1CDE6);
+    d = GG(d, a, b, c, x[k + 14], S22, 0xC33707D6);
+    c = GG(c, d, a, b, x[k + 3], S23, 0xF4D50D87);
+    b = GG(b, c, d, a, x[k + 8], S24, 0x455A14ED);
+    a = GG(a, b, c, d, x[k + 13], S21, 0xA9E3E905);
+    d = GG(d, a, b, c, x[k + 2], S22, 0xFCEFA3F8);
+    c = GG(c, d, a, b, x[k + 7], S23, 0x676F02D9);
+    b = GG(b, c, d, a, x[k + 12], S24, 0x8D2A4C8A);
+
+    a = HH(a, b, c, d, x[k + 5], S31, 0xFFFA3942);
+    d = HH(d, a, b, c, x[k + 8], S32, 0x8771F681);
+    c = HH(c, d, a, b, x[k + 11], S33, 0x6D9D6122);
+    b = HH(b, c, d, a, x[k + 14], S34, 0xFDE5380C);
+    a = HH(a, b, c, d, x[k + 1], S31, 0xA4BEEA44);
+    d = HH(d, a, b, c, x[k + 4], S32, 0x4BDECFA9);
+    c = HH(c, d, a, b, x[k + 7], S33, 0xF6BB4B60);
+    b = HH(b, c, d, a, x[k + 10], S34, 0xBEBFBC70);
+    a = HH(a, b, c, d, x[k + 13], S31, 0x289B7EC6);
+    d = HH(d, a, b, c, x[k + 0], S32, 0xEAA127FA);
+    c = HH(c, d, a, b, x[k + 3], S33, 0xD4EF3085);
+    b = HH(b, c, d, a, x[k + 6], S34, 0x04881D05);
+    a = HH(a, b, c, d, x[k + 9], S31, 0xD9D4D039);
+    d = HH(d, a, b, c, x[k + 12], S32, 0xE6DB99E5);
+    c = HH(c, d, a, b, x[k + 15], S33, 0x1FA27CF8);
+    b = HH(b, c, d, a, x[k + 2], S34, 0xC4AC5665);
+
+    a = II(a, b, c, d, x[k + 0], S41, 0xF4292244);
+    d = II(d, a, b, c, x[k + 7], S42, 0x432AFF97);
+    c = II(c, d, a, b, x[k + 14], S43, 0xAB9423A7);
+    b = II(b, c, d, a, x[k + 5], S44, 0xFC93A039);
+    a = II(a, b, c, d, x[k + 12], S41, 0x655B59C3);
+    d = II(d, a, b, c, x[k + 3], S42, 0x8F0CCC92);
+    c = II(c, d, a, b, x[k + 10], S43, 0xFFEFF47D);
+    b = II(b, c, d, a, x[k + 1], S44, 0x85845DD1);
+    a = II(a, b, c, d, x[k + 8], S41, 0x6FA87E4F);
+    d = II(d, a, b, c, x[k + 15], S42, 0xFE2CE6E0);
+    c = II(c, d, a, b, x[k + 6], S43, 0xA3014314);
+    b = II(b, c, d, a, x[k + 13], S44, 0x4E0811A1);
+    a = II(a, b, c, d, x[k + 4], S41, 0xF7537E82);
+    d = II(d, a, b, c, x[k + 11], S42, 0xBD3AF235);
+    c = II(c, d, a, b, x[k + 2], S43, 0x2AD7D2BB);
+    b = II(b, c, d, a, x[k + 9], S44, 0xEB86D391);
+
+    a = AU(a, AA);
+    b = AU(b, BB);
+    c = AU(c, CC);
+    d = AU(d, DD);
+  }
+
+  return (W2H(a) + W2H(b) + W2H(c) + W2H(d)).toLowerCase();
 }
 
-function readStore(key) {
-  return $persistentStore.read(key);
-}
-
-function writeStore(value, key) {
-  return $persistentStore.write(value, key);
-}
-
-function notify(subtitle, body) {
-  $notification.post(scriptName, subtitle, body || "");
-}
-
-function parseArgs(str) {
+function parseArgument() {
+  const raw = typeof $argument === "string" ? $argument : "";
   const out = {};
 
-  String(str || "").split("&").forEach(function (pair) {
+  raw.split("&").forEach(pair => {
     if (!pair) return;
 
     const idx = pair.indexOf("=");
@@ -260,63 +200,46 @@ function parseArgs(str) {
     const val = idx >= 0 ? pair.slice(idx + 1) : "";
 
     try {
-      out[key] = decodeURIComponent(val);
-    } catch (e) {
+      out[decodeURIComponent(key)] = decodeURIComponent(val.replace(/\+/g, "%20"));
+    } catch {
       out[key] = val;
     }
   });
 
-  function parseUnifiedArgs(str) {
-  const raw = String(str || "").trim();
-
-  if (!raw) return {};
-
-  const obj = parseArgs(raw);
-
-  if (Object.keys(obj).length > 1 || raw.indexOf("=") >= 0) {
-    return obj;
-  }
-
-  return {
-    run: raw
-  };
-}
-
   return out;
 }
 
-function pad2(n) {
-  return n < 10 ? "0" + n : String(n);
-}
+function boolArg(args, key, fallback) {
+  const value = args[key];
 
-function getUTCSignDate() {
-  const now = new Date();
-
-  return now.getUTCFullYear() + "-" +
-    pad2(now.getUTCMonth() + 1) + "-" +
-    pad2(now.getUTCDate()) + " " +
-    pad2(now.getUTCHours()) + ":" +
-    pad2(now.getUTCMinutes()) + ":" +
-    pad2(now.getUTCSeconds());
-}
-
-function safeDecode(value) {
-  if (value == null) return "";
-
-  try {
-    return decodeURIComponent(String(value));
-  } catch (e) {
-    return String(value);
+  if (value === undefined || value === null || value === "") {
+    return fallback;
   }
+
+  const s = String(value).trim().toLowerCase();
+  return s === "true" || s === "1" || s === "yes" || s === "y";
 }
 
-function emailKeyOf(paramsRaw) {
-  const raw = paramsRaw && paramsRaw.email;
-  return raw ? safeDecode(raw).trim().toLowerCase() : "";
+function intArg(args, key, fallback, min, max) {
+  const n = parseInt(String(args[key] ?? ""), 10);
+
+  if (!Number.isFinite(n)) return fallback;
+  if (typeof min === "number" && n < min) return min;
+  if (typeof max === "number" && n > max) return max;
+
+  return n;
+}
+
+function notify(subtitle, body) {
+  $notification.post(SCRIPT_NAME, subtitle || "", body || "");
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function loadStore() {
-  const raw = readStore(storeKey);
+  const raw = $persistentStore.read(STORE_KEY);
 
   if (!raw) {
     return {
@@ -327,23 +250,25 @@ function loadStore() {
   }
 
   try {
-    const obj = JSON.parse(raw);
+    const store = JSON.parse(raw);
 
-    if (!obj.accounts || typeof obj.accounts !== "object") {
-      obj.accounts = {};
+    if (!store || typeof store !== "object") {
+      throw new Error("invalid store");
     }
 
-    if (!Array.isArray(obj.order)) {
-      obj.order = Object.keys(obj.accounts);
+    if (!store.accounts || typeof store.accounts !== "object") {
+      store.accounts = {};
     }
 
-    obj.order = obj.order.filter(function (id) {
-      return obj.accounts[id];
-    });
+    if (!Array.isArray(store.order)) {
+      store.order = Object.keys(store.accounts);
+    }
 
-    obj.version = 3;
-    return obj;
-  } catch (e) {
+    store.order = store.order.filter(id => store.accounts[id]);
+    store.version = 3;
+
+    return store;
+  } catch {
     return {
       version: 3,
       accounts: {},
@@ -353,301 +278,324 @@ function loadStore() {
 }
 
 function saveStore(store) {
-  store.version = 3;
-
-  store.order = (store.order || Object.keys(store.accounts || {})).filter(function (id) {
-    return store.accounts[id];
-  });
-
-  return writeStore(JSON.stringify(store), storeKey);
+  $persistentStore.write(JSON.stringify(store), STORE_KEY);
 }
 
 function pick(arr, seed) {
   return arr[Math.abs(seed || 0) % arr.length];
 }
 
-function buildUA(baseUA, seed) {
-  const iosVer = pick(IOS_VERSIONS, seed);
-  const scale = pick(IOS_SCALES, seed + 1);
-  const model = pick(IPHONE_MODELS, seed + 2);
-  const cfn = pick(CFN_VERS, seed + 3);
-  const darwin = pick(DARWIN_VERS, seed + 4);
+function buildUA(base, seed) {
+  const iv = pick(IOS_VER, seed || 0);
+  const mo = pick(MODELS, (seed || 0) + 2);
 
-  if (baseUA && typeof baseUA === "string") {
-    let ua = baseUA;
-    let changed = false;
-
-    const replacements = [
-      [/iOS \d+(\.\d+){0,2}/, "iOS " + iosVer],
-      [/Scale\/\d+(\.\d+)?/, "Scale/" + scale],
-      [/iPhone\d+,\d+/, model],
-      [/CFNetwork\/[\d.]+/, "CFNetwork/" + cfn],
-      [/Darwin\/[\d.]+/, "Darwin/" + darwin]
-    ];
-
-    replacements.forEach(function (r) {
-      if (r[0].test(ua)) {
-        ua = ua.replace(r[0], r[1]);
-        changed = true;
-      }
-    });
-
-    if (changed) return ua;
+  if (base && typeof base === "string") {
+    let ua = base;
+    ua = ua.replace(/iOS \d+(\.\d+){0,2}/, "iOS " + iv);
+    ua = ua.replace(/iPhone\d+,\d+/, mo);
+    return ua;
   }
 
-  return "WeTalk/30.6.0 (com.innovationworks.wetalk; build:28; iOS " + iosVer + ") Alamofire/5.4.3";
+  return "WeTalk/30.6.0 (com.innovationworks.wetalk; build:28; iOS " + iv + ") Alamofire/5.4.3";
 }
 
-function buildSignedParamsRaw(capture) {
-  const params = {};
+function getUTCSignDate() {
+  const n = new Date();
+  const pad = x => String(x).padStart(2, "0");
 
-  Object.keys((capture && capture.paramsRaw) || {}).forEach(function (key) {
-    if (key !== "sign" && key !== "signDate") {
-      params[key] = capture.paramsRaw[key];
+  return (
+    n.getUTCFullYear() +
+    "-" +
+    pad(n.getUTCMonth() + 1) +
+    "-" +
+    pad(n.getUTCDate()) +
+    " " +
+    pad(n.getUTCHours()) +
+    ":" +
+    pad(n.getUTCMinutes()) +
+    ":" +
+    pad(n.getUTCSeconds())
+  );
+}
+
+function signedParams(capture) {
+  const p = {};
+
+  Object.keys(capture.paramsRaw || {}).forEach(k => {
+    if (k !== "sign" && k !== "signDate") {
+      p[k] = capture.paramsRaw[k];
     }
   });
 
-  params.signDate = getUTCSignDate();
+  p.signDate = getUTCSignDate();
 
-  const signBase = Object.keys(params)
+  const base = Object.keys(p)
     .sort()
-    .map(function (key) {
-      return key + "=" + params[key];
-    })
+    .map(k => k + "=" + p[k])
     .join("&");
 
-  params.sign = md5(signBase + SECRET);
+  p.sign = MD5(base + SECRET);
 
-  return params;
+  return p;
 }
 
-function buildUrl(path, capture) {
-  const params = buildSignedParamsRaw(capture);
+function buildHeaders(acc) {
+  const headers = Object.assign({}, acc.capture.headers || {});
+  const ua = buildUA(acc.baseUA, acc.uaSeed || 0);
 
-  const query = Object.keys(params)
-    .map(function (key) {
-      return key + "=" + encodeURIComponent(params[key]);
-    })
-    .join("&");
+  Object.keys(headers).forEach(key => {
+    const lower = key.toLowerCase();
 
-  return "https://" + API_HOST + "/app/" + path + "?" + query;
-}
-
-function buildHeaders(capture, ua) {
-  const headers = {};
-
-  Object.keys((capture && capture.headers) || {}).forEach(function (k) {
-    const lower = String(k).toLowerCase();
-
-    if (lower !== "content-length" && lower !== "user-agent" && k.charAt(0) !== ":") {
-      headers[k] = capture.headers[k];
+    if (
+      lower === "content-length" ||
+      lower === "host" ||
+      lower === "user-agent" ||
+      key.startsWith(":")
+    ) {
+      delete headers[key];
     }
   });
 
-  headers.Host = API_HOST;
-  headers.Accept = headers.Accept || headers.accept || "application/json";
+  headers["Host"] = API_HOST;
   headers["User-Agent"] = ua;
+  headers["Accept"] = headers["Accept"] || headers["accept"] || "application/json";
 
   return headers;
 }
 
-function fetchRequest(options) {
-  return new Promise(function (resolve, reject) {
-    $httpClient.get(options, function (error, response, data) {
+function buildUrl(path, capture) {
+  const p = signedParams(capture);
+  const original = capture.paramsRaw || {};
+
+  const qs = Object.keys(p)
+    .map(k => {
+      if (
+        Object.prototype.hasOwnProperty.call(original, k) &&
+        k !== "sign" &&
+        k !== "signDate"
+      ) {
+        return encodeURIComponent(k) + "=" + p[k];
+      }
+
+      return encodeURIComponent(k) + "=" + encodeURIComponent(p[k]);
+    })
+    .join("&");
+
+  return "https://" + API_HOST + "/app/" + path + "?" + qs;
+}
+
+function httpGetJSON(options) {
+  return new Promise((resolve, reject) => {
+    $httpClient.get(options, (error, response, data) => {
       if (error) {
         reject(error);
-      } else {
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(data || "{}"));
+      } catch {
         resolve({
-          statusCode: response && response.status,
-          headers: response && response.headers,
-          body: data
+          retcode: -1,
+          retmsg: "响应不是 JSON：" + String(data || "").slice(0, 120)
         });
       }
     });
   });
 }
 
-function sleep(ms) {
-  return new Promise(function (resolve) {
-    setTimeout(resolve, ms);
+async function api(acc, path) {
+  const url = buildUrl(path, acc.capture);
+  const headers = buildHeaders(acc);
+
+  return await httpGetJSON({
+    url,
+    headers,
+    timeout: 15
   });
 }
 
 function splitList(value) {
   return String(value || "")
-    .split(/[\n,，;；]+/)
-    .map(function (s) {
-      return s.trim();
-    })
+    .split(/[\n,，;；\s]+/)
+    .map(s => s.trim())
     .filter(Boolean);
 }
 
 function matchAccountIds(store, tokens) {
-  const allIds = (store.order || []).filter(function (id) {
-    const acc = store.accounts[id];
-    return acc && acc.capture && acc.capture.paramsRaw;
-  });
+  const allIds = (store.order || []).filter(
+    id => store.accounts && store.accounts[id] && store.accounts[id].capture
+  );
 
-  if (!tokens.length) return allIds;
+  if (!tokens.length) {
+    return allIds;
+  }
 
-  const result = [];
+  const result = new Set();
 
-  tokens.forEach(function (tokenRaw) {
+  tokens.forEach(tokenRaw => {
     const token = String(tokenRaw || "").trim().toLowerCase();
 
     if (!token) return;
 
     if (/^\d+$/.test(token)) {
-      const idx = Number(token);
-      if (idx >= 1 && idx <= allIds.length && result.indexOf(allIds[idx - 1]) < 0) {
-        result.push(allIds[idx - 1]);
+      const index = Number(token);
+
+      if (index >= 1 && index <= allIds.length) {
+        result.add(allIds[index - 1]);
+        return;
       }
-      return;
     }
 
-    allIds.forEach(function (id) {
-      const acc = store.accounts[id] || {};
+    allIds.forEach(id => {
+      const acc = store.accounts[id];
 
       const candidates = [id, acc.id, acc.email, acc.alias]
         .filter(Boolean)
-        .map(function (v) {
-          return String(v).trim().toLowerCase();
-        });
+        .map(v => String(v).trim().toLowerCase());
 
-      if (candidates.indexOf(token) >= 0 && result.indexOf(id) < 0) {
-        result.push(id);
+      if (candidates.includes(token)) {
+        result.add(id);
       }
     });
   });
 
-  return result;
+  return Array.from(result);
 }
 
-function parseJsonSafe(text) {
+async function runAccount(acc, idx, total, opts) {
+  const label = "[" + (idx + 1) + "/" + total + " " + (acc.alias || acc.email || acc.id) + "]";
+  const logArr = [label];
+
+  console.log(label + " 开始处理...");
+
   try {
-    return JSON.parse(text || "{}");
+    const balance = await api(acc, "queryBalanceAndBonus");
+
+    if (balance.retcode === 0) {
+      logArr.push("[余额] " + (balance.result && balance.result.balance !== undefined ? balance.result.balance : "?") + " Coins");
+    } else {
+      logArr.push("[查询] " + (balance.retmsg || "失败"));
+    }
   } catch (e) {
-    return {
-      retcode: -1,
-      retmsg: "响应不是 JSON：" + String(text || "").slice(0, 120)
-    };
-  }
-}
-
-function runAccount(acc, index, total) {
-  const tag = "[账号" + (index + 1) + "/" + total + " " + (acc.alias || acc.email || acc.id) + "]";
-  const ua = buildUA(acc.baseUA, acc.uaSeed || 0);
-  const headers = buildHeaders(acc.capture, ua);
-  const msgs = [tag];
-
-  function fetchApi(path) {
-    return fetchRequest({
-      url: buildUrl(path, acc.capture),
-      headers: headers,
-      timeout: 10
-    }).then(function (res) {
-      return parseJsonSafe(res.body);
-    });
+    logArr.push("[查询异常] " + (e.message || String(e)));
   }
 
-  return fetchApi("queryBalanceAndBonus")
-    .then(function (d) {
-      if (d.retcode === 0) {
-        msgs.push("余额：" + ((d.result && d.result.balance) || "?") + " Coins");
-      } else {
-        msgs.push("⚠️ 查询：" + (d.retmsg || "失败"));
-      }
+  if (opts.enableCheckin) {
+    try {
+      const d = await api(acc, "checkIn");
+      const msg = d.retcode === 0
+        ? (d.result && d.result.bonusHint ? d.result.bonusHint : "成功")
+        : (d.retmsg || "失败");
 
-      return fetchApi("checkIn");
-    }, function (err) {
-      msgs.push("❌ 查询：" + (err.message || err.error || String(err)));
-      return fetchApi("checkIn");
-    })
-    .then(function (d) {
-      if (d.retcode === 0) {
-        const hint = String((d.result && d.result.bonusHint) || d.retmsg || "成功").replace(/\n/g, " ");
-        msgs.push("✅ 签到：" + hint);
-      } else {
-        msgs.push("⚠️ 签到：" + (d.retmsg || "失败"));
-      }
-    }, function (err) {
-      msgs.push("❌ 签到：" + (err.message || err.error || String(err)));
-    })
-    .then(function () {
-      let chain = Promise.resolve();
+      logArr.push("[签到] " + msg);
+      console.log(label + " [签到] " + msg);
+    } catch (e) {
+      logArr.push("[签到异常] " + (e.message || String(e)));
+    }
+  } else {
+    logArr.push("[签到] 已关闭");
+  }
 
-      for (let i = 1; i <= MAX_VIDEO; i++) {
-        chain = chain.then(function () {
-          return sleep(i === 1 ? 1500 : VIDEO_DELAY).then(function () {
-            return fetchApi("videoBonus").then(function (d) {
-              if (d.retcode === 0) {
-                msgs.push("视频" + i + "：+" + ((d.result && d.result.bonus) || "?") + " Coins");
-              } else {
-                msgs.push("⏸ 视频" + i + "：" + (d.retmsg || "停止"));
-                throw new Error("__STOP_VIDEO__");
-              }
-            });
-          });
-        });
-      }
+  if (opts.enableVideo) {
+    for (let i = 1; i <= opts.maxVideo; i++) {
+      await sleep(i === 1 ? 1000 : opts.videoDelay);
 
-      return chain.catch(function (err) {
-        if (String(err.message || err) !== "__STOP_VIDEO__") {
-          msgs.push("❌ 视频：" + (err.message || err.error || String(err)));
-        }
-      });
-    })
-    .then(function () {
-      return fetchApi("queryBalanceAndBonus").then(function (d) {
+      try {
+        const d = await api(acc, "videoBonus");
+
         if (d.retcode === 0) {
-          msgs.push("最新余额：" + ((d.result && d.result.balance) || "?") + " Coins");
+          const bonus = d.result && d.result.bonus !== undefined ? d.result.bonus : "?";
+          logArr.push("[视频" + i + "] +" + bonus);
+          console.log(label + " [视频" + i + "] +" + bonus);
+        } else {
+          logArr.push("[视频" + i + "] " + (d.retmsg || "停止"));
+          break;
         }
-      }, function () {});
-    })
-    .then(function () {
-      return msgs.join("\n");
-    })
-    .catch(function (err) {
-      msgs.push("❌ 异常：" + (err.message || err.error || String(err)));
-      return msgs.join("\n");
-    });
+      } catch (e) {
+        logArr.push("[视频" + i + "异常] " + (e.message || String(e)));
+        break;
+      }
+    }
+  } else {
+    logArr.push("[视频奖励] 已关闭");
+  }
+
+  try {
+    const latest = await api(acc, "queryBalanceAndBonus");
+
+    if (latest.retcode === 0) {
+      logArr.push("[最新余额] " + (latest.result && latest.result.balance !== undefined ? latest.result.balance : "?") + " Coins");
+    }
+  } catch {}
+
+  return logArr.join("\n");
 }
 
-(function main() {
-  const args = parseUnifiedArgs(typeof $argument !== "undefined" ? $argument : "");
-const store = loadStore();
+async function main() {
+  console.log("[WeTalk Task] 任务启动...");
 
-const ids = matchAccountIds(store, splitList(args.run || args.RUN_ACCOUNTS || ""));
+  const args = parseArgument();
+
+  if (!boolArg(args, "TASK_ENABLED", true)) {
+    notify("任务已关闭", "TASK_ENABLED=false，定时任务未执行。");
+    return;
+  }
+
+  const store = loadStore();
+
+  if (!store || !store.order || !store.order.length) {
+    console.log("[WeTalk Task] 未发现已存储的账号");
+    notify("无可用账号", "请先启用 MitM，然后打开 WeTalk 触发 queryBalanceAndBonus 请求。");
+    return;
+  }
+
+  const opts = {
+    enableCheckin: boolArg(args, "ENABLE_CHECKIN", true),
+    enableVideo: boolArg(args, "ENABLE_VIDEO", true),
+    maxVideo: intArg(args, "MAX_VIDEO", 5, 1, 10),
+    videoDelay: intArg(args, "VIDEO_DELAY_MS", 8000, 1000, 60000),
+    accountGap: intArg(args, "ACCOUNT_GAP_MS", 3500, 0, 120000)
+  };
+
+  const runTokens = splitList(args.RUN_ACCOUNTS || "");
+  const ids = matchAccountIds(store, runTokens);
 
   if (!ids.length) {
-    notify("未抓到任何账号", "请先启用 MitM，打开 WeTalk 并触发 queryBalanceAndBonus 请求。");
-    $done();
+    notify("未匹配到账号", "RUN_ACCOUNTS 未匹配到已保存账号。留空可运行全部账号。");
     return;
   }
 
   const results = [];
 
-  let chain = Promise.resolve();
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    const acc = store.accounts[id];
 
-  ids.forEach(function (id, idx) {
-    chain = chain
-      .then(function () {
-        return runAccount(store.accounts[id], idx, ids.length);
-      })
-      .then(function (text) {
-        results.push(text);
-      })
-      .then(function () {
-        return idx < ids.length - 1 ? sleep(ACCOUNT_GAP) : null;
-      });
-  });
+    results.push(await runAccount(acc, i, ids.length, opts));
 
-  chain.then(function () {
-    saveStore(store);
-    notify("全部完成（" + ids.length + "个账号）", results.join("\n———\n").slice(0, 4000));
+    if (i < ids.length - 1) {
+      await sleep(opts.accountGap);
+    }
+  }
+
+  saveStore(store);
+
+  console.log("[WeTalk Task] 任务完成。");
+
+  notify(
+    "任务完成（" + ids.length + "个账号）",
+    results.join("\n---\n").slice(0, 4000)
+  );
+}
+
+(async () => {
+  try {
+    await main();
+  } catch (e) {
+    console.log("[WeTalk Task] 异常：" + (e.message || String(e)));
+    notify("任务异常", e.message || String(e));
+  } finally {
     $done();
-  }).catch(function (err) {
-    notify("任务异常", results.join("\n———\n") + "\n" + (err.message || err.error || String(err)));
-    $done();
-  });
+  }
 })();
