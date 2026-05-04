@@ -1,38 +1,66 @@
-// WeTalk_capture.js for Surge
-// 用途：抓取 queryBalanceAndBonus 请求参数并保存为多账号数据
+/*
+ * WeTalk_capture.js - Surge 参数抓取脚本
+ * 类型：http-request
+ */
 
-const scriptName = "WeTalk";
-const storeKey = "wetalk_accounts_v1";
+const SCRIPT_NAME = "WeTalk";
+const STORE_KEY = "wetalk_accounts_v1";
 
-function readStore(key) {
-  return $persistentStore.read(key);
+function parseArgument() {
+  const raw = typeof $argument === "string" ? $argument : "";
+  const out = {};
+
+  raw.split("&").forEach(pair => {
+    if (!pair) return;
+
+    const idx = pair.indexOf("=");
+    const key = idx >= 0 ? pair.slice(0, idx) : pair;
+    const val = idx >= 0 ? pair.slice(idx + 1) : "";
+
+    try {
+      out[decodeURIComponent(key)] = decodeURIComponent(val.replace(/\+/g, "%20"));
+    } catch {
+      out[key] = val;
+    }
+  });
+
+  return out;
 }
 
-function writeStore(value, key) {
-  return $persistentStore.write(value, key);
+function boolArg(args, key, fallback) {
+  const value = args[key];
+
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  const s = String(value).trim().toLowerCase();
+  return s === "true" || s === "1" || s === "yes" || s === "y";
 }
 
 function notify(subtitle, body) {
-  $notification.post(scriptName, subtitle, body || "");
+  $notification.post(SCRIPT_NAME, subtitle || "", body || "");
 }
 
 function safeDecode(value) {
   if (value == null) return "";
+
   try {
     return decodeURIComponent(String(value));
-  } catch (e) {
+  } catch {
     return String(value);
   }
 }
 
 function parseRawQuery(url) {
-  const query = (String(url || "").split("?")[1] || "").split("#")[0];
+  const query = String(url || "").split("?")[1]?.split("#")[0] || "";
   const out = {};
 
-  query.split("&").forEach(function (pair) {
+  query.split("&").forEach(pair => {
     if (!pair) return;
 
     const idx = pair.indexOf("=");
+
     if (idx < 0) {
       out[pair] = "";
     } else {
@@ -43,68 +71,50 @@ function parseRawQuery(url) {
   return out;
 }
 
-function cloneHeaders(headers) {
-  const out = {};
-  Object.keys(headers || {}).forEach(function (key) {
-    out[key] = headers[key];
-  });
-  return out;
-}
-
-function getHeader(headers, name) {
-  const target = String(name).toLowerCase();
-  for (const key in headers || {}) {
-    if (String(key).toLowerCase() === target) return headers[key];
-  }
-  return "";
-}
-
-function simpleHash(text) {
-  let hash = 5381;
-  const str = String(text || "");
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) + hash) + str.charCodeAt(i);
-    hash = hash & 0xffffffff;
-  }
-  return Math.abs(hash).toString(16);
-}
-
 function emailKeyOf(paramsRaw) {
   const raw = paramsRaw && paramsRaw.email;
   return raw ? safeDecode(raw).trim().toLowerCase() : "";
+}
+
+function simpleHash(input) {
+  let h = 2166136261;
+  const s = String(input || "");
+
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+  }
+
+  return (h >>> 0).toString(16).padStart(8, "0");
 }
 
 function fingerprintOf(paramsRaw) {
   const email = emailKeyOf(paramsRaw);
   if (email) return email;
 
-  const drop = {
-    sign: 1,
-    signDate: 1,
-    timestamp: 1,
-    ts: 1,
-    nonce: 1,
-    random: 1,
-    reqTime: 1,
-    reqId: 1,
-    requestId: 1
-  };
+  const volatileKeys = new Set([
+    "sign",
+    "signDate",
+    "timestamp",
+    "ts",
+    "nonce",
+    "random",
+    "reqTime",
+    "reqId",
+    "requestId"
+  ]);
 
   const base = Object.keys(paramsRaw || {})
-    .filter(function (k) {
-      return !drop[k];
-    })
+    .filter(key => !volatileKeys.has(key))
     .sort()
-    .map(function (k) {
-      return k + "=" + paramsRaw[k];
-    })
+    .map(key => `${key}=${paramsRaw[key]}`)
     .join("&");
 
   return "fp_" + simpleHash(base);
 }
 
 function loadStore() {
-  const raw = readStore(storeKey);
+  const raw = $persistentStore.read(STORE_KEY);
 
   if (!raw) {
     return {
@@ -115,23 +125,25 @@ function loadStore() {
   }
 
   try {
-    const obj = JSON.parse(raw);
+    const store = JSON.parse(raw);
 
-    if (!obj.accounts || typeof obj.accounts !== "object") {
-      obj.accounts = {};
+    if (!store || typeof store !== "object") {
+      throw new Error("invalid store");
     }
 
-    if (!Array.isArray(obj.order)) {
-      obj.order = Object.keys(obj.accounts);
+    if (!store.accounts || typeof store.accounts !== "object") {
+      store.accounts = {};
     }
 
-    obj.order = obj.order.filter(function (id) {
-      return obj.accounts[id];
-    });
+    if (!Array.isArray(store.order)) {
+      store.order = Object.keys(store.accounts);
+    }
 
-    obj.version = 3;
-    return obj;
-  } catch (e) {
+    store.order = store.order.filter(id => store.accounts[id]);
+    store.version = 3;
+
+    return store;
+  } catch {
     return {
       version: 3,
       accounts: {},
@@ -141,16 +153,74 @@ function loadStore() {
 }
 
 function saveStore(store) {
+  if (!store.accounts || typeof store.accounts !== "object") {
+    store.accounts = {};
+  }
+
+  if (!Array.isArray(store.order)) {
+    store.order = Object.keys(store.accounts);
+  }
+
+  store.order = store.order.filter(id => store.accounts[id]);
   store.version = 3;
 
-  store.order = (store.order || Object.keys(store.accounts || {})).filter(function (id) {
-    return store.accounts[id];
-  });
-
-  return writeStore(JSON.stringify(store), storeKey);
+  $persistentStore.write(JSON.stringify(store), STORE_KEY);
 }
 
-(function main() {
+function maskAccount(text, showSensitive) {
+  const s = String(text || "");
+
+  if (showSensitive) return s;
+
+  if (!s.includes("@")) {
+    return s.length > 12 ? `${s.slice(0, 6)}…${s.slice(-4)}` : s;
+  }
+
+  const parts = s.split("@");
+  const name = parts[0] || "";
+  const domain = parts[1] || "";
+
+  const maskedName =
+    name.length <= 2
+      ? `${name[0] || "*"}*`
+      : `${name.slice(0, 2)}***${name.slice(-1)}`;
+
+  return `${maskedName}@${domain}`;
+}
+
+function formatAccountList(store, showSensitive) {
+  const ids = (store.order || []).filter(id => store.accounts[id]);
+
+  if (!ids.length) {
+    return "当前未保存账号。";
+  }
+
+  return ids
+    .map((id, index) => {
+      const acc = store.accounts[id];
+      const label = acc.alias || acc.email || acc.id || id;
+      const display = maskAccount(label, showSensitive);
+      const updated = acc.updatedAt
+        ? new Date(acc.updatedAt).toLocaleString()
+        : "未知时间";
+
+      return [
+        `${index + 1}. ${display}`,
+        `ID: ${maskAccount(id, showSensitive)}`,
+        `更新时间: ${updated}`
+      ].join("\n");
+    })
+    .join("\n\n");
+}
+
+function main() {
+  const args = parseArgument();
+
+  if (!boolArg(args, "CAPTURE_ENABLED", true)) {
+    $done({});
+    return;
+  }
+
   if (typeof $request === "undefined" || !$request || !$request.url) {
     notify("抓取失败", "未检测到 $request，请确认脚本类型为 http-request。");
     $done({});
@@ -165,42 +235,50 @@ function saveStore(store) {
     return;
   }
 
-  const headers = cloneHeaders($request.headers || {});
+  const headers = $request.headers || {};
   const email = emailKeyOf(paramsRaw);
   const accountId = email || fingerprintOf(paramsRaw);
-
-  const store = loadStore();
-  const existed = !!store.accounts[accountId];
   const now = Date.now();
 
-  const uaSeed = existed ? (store.accounts[accountId].uaSeed || 0) : store.order.length;
-  const alias = existed ? (store.accounts[accountId].alias || email || accountId) : (email || accountId);
+  const store = loadStore();
+  const existed = Boolean(store.accounts[accountId]);
+  const previous = store.accounts[accountId] || {};
 
   store.accounts[accountId] = {
     id: accountId,
-    email: email,
-    alias: alias,
-    uaSeed: uaSeed,
-    baseUA: getHeader(headers, "User-Agent"),
+    email,
+    alias: previous.alias || email || accountId,
+    uaSeed: Number.isInteger(previous.uaSeed) ? previous.uaSeed : store.order.length,
+    baseUA: headers["User-Agent"] || headers["user-agent"] || "",
     capture: {
       url: $request.url,
-      paramsRaw: paramsRaw,
-      headers: headers
+      paramsRaw,
+      headers
     },
-    createdAt: existed ? store.accounts[accountId].createdAt : now,
+    createdAt: previous.createdAt || now,
     updatedAt: now
   };
 
-  if (!existed && store.order.indexOf(accountId) < 0) {
+  if (!existed && !store.order.includes(accountId)) {
     store.order.push(accountId);
   }
 
-  const ok = saveStore(store);
+  saveStore(store);
+
+  const showSensitive = boolArg(args, "SHOW_SENSITIVE", false);
+  const list = formatAccountList(store, showSensitive);
 
   notify(
-    ok ? (existed ? "账号参数已更新" : "新账号已入库") : "存储失败",
-    ok ? (alias + "\n当前账号总数：" + store.order.length) : "Surge 持久化存储写入失败。"
+    existed ? "账号参数已更新" : "新账号已入库",
+    `当前账号总数：${store.order.length}\n\n${list}`
   );
 
   $done({});
-})();
+}
+
+try {
+  main();
+} catch (e) {
+  notify("抓取异常", e.message || String(e));
+  $done({});
+}
