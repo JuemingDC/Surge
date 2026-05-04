@@ -9,17 +9,13 @@ function notify(subtitle, body) {
   $notification.post(SCRIPT_NAME, subtitle || "", body || "");
 }
 
-function done(value) {
-  if (typeof value === "undefined") {
-    $done({});
-  } else {
-    $done(value);
-  }
+function finish(value) {
+  $done(typeof value === "undefined" ? {} : value);
 }
 
 function readStore() {
   const raw = $persistentStore.read(STORE_KEY);
-  if (!raw) return { version: 1, accounts: {}, order: [] };
+  if (!raw) return { version: 2, accounts: {}, order: [] };
 
   try {
     const data = JSON.parse(raw);
@@ -27,7 +23,7 @@ function readStore() {
     if (!Array.isArray(data.order)) data.order = Object.keys(data.accounts);
     return data;
   } catch (e) {
-    return { version: 1, accounts: {}, order: [] };
+    return { version: 2, accounts: {}, order: [] };
   }
 }
 
@@ -43,33 +39,22 @@ function decodeSafe(value) {
   }
 }
 
-function parseQueryRaw(url) {
+function parseRawQuery(url) {
   const query = String(url || "").split("?")[1] || "";
   const clean = query.split("#")[0];
   const result = {};
 
-  clean.split("&").forEach(item => {
-    if (!item) return;
-    const index = item.indexOf("=");
-    if (index < 0) return;
+  clean.split("&").forEach(pair => {
+    if (!pair) return;
+    const idx = pair.indexOf("=");
+    if (idx < 0) return;
 
-    const key = item.slice(0, index);
-    const value = item.slice(index + 1);
+    const key = pair.slice(0, idx);
+    const value = pair.slice(idx + 1);
     result[key] = value;
   });
 
   return result;
-}
-
-function getHeader(headers, name) {
-  const target = String(name).toLowerCase();
-  const keys = Object.keys(headers || {});
-  for (let i = 0; i < keys.length; i++) {
-    if (keys[i].toLowerCase() === target) {
-      return headers[keys[i]];
-    }
-  }
-  return "";
 }
 
 function normalizeHeaders(headers) {
@@ -80,48 +65,78 @@ function normalizeHeaders(headers) {
   return output;
 }
 
-function getEmail(params) {
-  const email = decodeSafe(params.email || "").trim().toLowerCase();
-  return email;
+function getHeader(headers, name) {
+  const target = String(name).toLowerCase();
+  const keys = Object.keys(headers || {});
+  for (let i = 0; i < keys.length; i++) {
+    if (keys[i].toLowerCase() === target) return headers[keys[i]];
+  }
+  return "";
+}
+
+function emailKeyOf(paramsRaw) {
+  const raw = paramsRaw && paramsRaw.email;
+  if (!raw) return "";
+  return decodeSafe(raw).trim().toLowerCase();
 }
 
 function capture() {
   if (typeof $request === "undefined" || !$request || !$request.url) {
-    notify("抓取失败", "当前脚本不是 http-request 触发，未检测到 $request。");
-    done();
+    notify("抓取失败", "未检测到 $request。该脚本必须由 http-request 触发。");
+    finish();
     return;
   }
 
-  const paramsRaw = parseQueryRaw($request.url);
-  const email = getEmail(paramsRaw);
+  const paramsRaw = parseRawQuery($request.url);
+  const email = emailKeyOf(paramsRaw);
 
   if (!email) {
-    notify("抓取失败", "queryBalanceAndBonus 请求中没有 email 参数。请确认 WeTalk 已登录后重新打开相关页面。");
-    done();
+    notify(
+      "抓取失败",
+      [
+        "当前 queryBalanceAndBonus 请求中没有 email 参数。",
+        "未保存账号，避免生成无效 fp_ 账号。",
+        "请确认 WeTalk 已登录后重新进入余额/签到相关页面。"
+      ].join("\n")
+    );
+    finish();
     return;
   }
 
-  const headers = normalizeHeaders($request.headers || {});
-  const userAgent = getHeader(headers, "User-Agent");
+  const headersMap = normalizeHeaders($request.headers || {});
+  const baseUA = getHeader(headersMap, "User-Agent");
 
   const store = readStore();
+
+  // 清理历史错误保存的 fp_ 账号
+  Object.keys(store.accounts).forEach(id => {
+    if (/^fp_[a-f0-9]+$/i.test(id)) {
+      delete store.accounts[id];
+    }
+  });
+  store.order = store.order.filter(id => store.accounts[id] && !/^fp_[a-f0-9]+$/i.test(id));
+
   const now = Date.now();
   const existed = !!store.accounts[email];
+  const uaSeed = existed ? (store.accounts[email].uaSeed || 0) : store.order.length;
+  const alias = existed ? (store.accounts[email].alias || email) : email;
 
   store.accounts[email] = {
     id: email,
     email: email,
-    alias: existed ? (store.accounts[email].alias || email) : email,
-    userAgent: userAgent,
-    paramsRaw: paramsRaw,
-    headers: headers,
+    alias: alias,
+    uaSeed: uaSeed,
+    baseUA: baseUA,
+    capture: {
+      url: $request.url,
+      paramsRaw: paramsRaw,
+      headers: headersMap
+    },
     createdAt: existed ? store.accounts[email].createdAt : now,
     updatedAt: now
   };
 
-  if (!existed) {
-    store.order.push(email);
-  }
+  if (!existed) store.order.push(email);
 
   const ok = writeStore(store);
 
@@ -130,13 +145,13 @@ function capture() {
     `${email}\n账号数量：${store.order.length}\n保存状态：${ok ? "成功" : "失败"}`
   );
 
-  console.log(`[WeTalk] capture ${existed ? "update" : "add"}: ${email}`);
-  done();
+  console.log(`[WeTalk Capture] ${existed ? "update" : "add"} account: ${email}`);
+  finish();
 }
 
 try {
   capture();
 } catch (e) {
   notify("抓取脚本异常", String(e && e.stack ? e.stack : e));
-  done();
+  finish();
 }
