@@ -1,62 +1,14 @@
-#!name=WeTalk 自动化签到+视频奖励
-#!desc=使用说明：① 首次使用请启用 MitM 并信任证书；② 打开 WeTalk 触发 queryBalanceAndBonus 请求完成参数抓取；③ WETALK_ACTION 留空表示定时任务运行全部账号；④ 填 run=1 表示只运行第1个账号；⑤ 填 list 后手动运行「WeTalk 账号管理」查看账号；⑥ 填 delete=1 或 delete=1,2 后手动运行「WeTalk 账号管理」删除账号；⑦ 填 clear=true 后手动运行「WeTalk 账号管理」清空账号。删除或清空后请把 WETALK_ACTION 改回空值或 list，避免误操作。
-#!author=TG@ZenMoFiShi, converted for Surge
-#!category=签到
-#!arguments=WETALK_ACTION=
-
-# ==============================
-# WeTalk Surge Module 使用说明
-# ==============================
-#
-# 一、首次抓取账号
-# 1. 启用本模块。
-# 2. 打开 Surge 的 MitM，并确认已安装、信任 CA 证书。
-# 3. 打开 WeTalk App，进入能触发余额/奖励查询的页面。
-# 4. 当请求命中：
-#    https://api.wetalkapp.com/app/queryBalanceAndBonus
-#    脚本会自动保存账号参数。
-#
-# 二、WETALK_ACTION 参数说明
-# 该模块只使用一个参数：WETALK_ACTION
-#
-# 留空：
-#   定时任务运行全部已保存账号。
-#
-# run=1
-#   定时任务只运行第 1 个账号。
-#
-# run=1,2
-#   定时任务只运行第 1、2 个账号。
-#
-# list
-#   手动运行「WeTalk 账号管理」后，查看当前已保存账号列表。
-#
-# delete=1
-#   手动运行「WeTalk 账号管理」后，删除第 1 个账号。
-#
-# delete=1,2
-#   手动运行「WeTalk 账号管理」后，删除第 1、2 个账号。
-#
-# delete=example@email.com
-#   手动运行「WeTalk 账号管理」后，按邮箱删除账号。
-#
-# clear=true
-#   手动运行「WeTalk 账号管理」后，清空全部账号。
-#
-# 三、重要注意事项
-# 1. delete= 或 clear=true 执行完成后，建议立刻把 WETALK_ACTION 改回空值或 list。
-# 2. 如果修改 module 后编辑参数界面没有变化，请删除旧模块后重新导入。
-# 3. 如果仍显示旧参数，可临时修改 #!name，让 Surge 按新模块重新加载。
-# 4. 本模块不使用 [Panel] 段，避免不符合 Surge module patch section 的问题。
-#
-# ==============================
+#!name=WeTalk Auto Checkin
+#!desc=Capture WeTalk account parameters and run checkin or video bonus tasks automatically.
+#!author=TG@ZenMoFiShi, modified for Surge
+#!arguments=CAPTURE_ENABLED=true&TASK_ENABLED=true&ENABLE_CHECKIN=true&ENABLE_VIDEO=true&MAX_VIDEO=5&VIDEO_DELAY_MS=8000&ACCOUNT_GAP_MS=3500&RUN_ACCOUNTS=&DELETE_ACCOUNTS=&DELETE_ALL=false&SHOW_SENSITIVE=false
 
 [Script]
-WeTalk 参数抓取 = type=http-request, pattern=^https:\/\/api\.wetalkapp\.com\/app\/queryBalanceAndBonus(?:\?.*)?$, script-path=https://raw.githubusercontent.com/JuemingDC/Surge/main/JavaScript/Wetalk/Wetalk_capture.js, timeout=10, script-update-interval=0, argument=SHOW_SENSITIVE=false
+WeTalk_Capture = type=http-request, pattern=^https:\/\/api\.wetalkapp\.com\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/JuemingDC/Surge/refs/heads/main/JavaScript/Wetalk/Wetalk_capture.js, script-update-interval=0, timeout=10, argument=CAPTURE_ENABLED=%CAPTURE_ENABLED%&SHOW_SENSITIVE=%SHOW_SENSITIVE%
 
-WeTalk 签到任务 = type=cron, cronexp="5 */6 * * *", script-path=https://raw.githubusercontent.com/JuemingDC/Surge/main/JavaScript/Wetalk/Wetalk_task.js, timeout=120, script-update-interval=0, argument=%WETALK_ACTION%
+WeTalk_Task = type=cron, cronexp="20 8,20 * * *", script-path=https://raw.githubusercontent.com/JuemingDC/Surge/refs/heads/main/JavaScript/Wetalk/Wetalk_task.js, script-update-interval=0, timeout=120, argument=TASK_ENABLED=%TASK_ENABLED%&ENABLE_CHECKIN=%ENABLE_CHECKIN%&ENABLE_VIDEO=%ENABLE_VIDEO%&MAX_VIDEO=%MAX_VIDEO%&VIDEO_DELAY_MS=%VIDEO_DELAY_MS%&ACCOUNT_GAP_MS=%ACCOUNT_GAP_MS%&RUN_ACCOUNTS=%RUN_ACCOUNTS%
 
-WeTalk 账号管理 = type=generic, script-path=https://raw.githubusercontent.com/JuemingDC/Surge/main/JavaScript/Wetalk/Wetalk_account_manager.js, timeout=30, script-update-interval=0, argument=%WETALK_ACTION%
+WeTalk_Account_Manager = type=generic, script-path=https://raw.githubusercontent.com/JuemingDC/Surge/refs/heads/main/JavaScript/Wetalk/Wetalk_account_manager.js, script-update-interval=0, timeout=30, argument=DELETE_ACCOUNTS=%DELETE_ACCOUNTS%&DELETE_ALL=%DELETE_ALL%
 
 [MITM]
 hostname = %APPEND% api.wetalkapp.com
