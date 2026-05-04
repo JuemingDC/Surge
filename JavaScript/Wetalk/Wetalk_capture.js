@@ -1,25 +1,25 @@
 /*
- * WeTalk_capture.js - Surge 参数抓取脚本
- * 类型：http-request
+ * WeTalk_capture.js
+ * Surge http-request script
  */
 
-const SCRIPT_NAME = "WeTalk";
-const STORE_KEY = "wetalk_accounts_v1";
+var SCRIPT_NAME = "WeTalk";
+var STORE_KEY = "wetalk_accounts_v1";
 
 function parseArgument() {
-  const raw = typeof $argument === "string" ? $argument : "";
-  const out = {};
+  var raw = typeof $argument === "string" ? $argument : "";
+  var out = {};
 
-  raw.split("&").forEach(pair => {
+  raw.split("&").forEach(function(pair) {
     if (!pair) return;
 
-    const idx = pair.indexOf("=");
-    const key = idx >= 0 ? pair.slice(0, idx) : pair;
-    const val = idx >= 0 ? pair.slice(idx + 1) : "";
+    var idx = pair.indexOf("=");
+    var key = idx >= 0 ? pair.slice(0, idx) : pair;
+    var val = idx >= 0 ? pair.slice(idx + 1) : "";
 
     try {
       out[decodeURIComponent(key)] = decodeURIComponent(val.replace(/\+/g, "%20"));
-    } catch {
+    } catch (e) {
       out[key] = val;
     }
   });
@@ -28,13 +28,13 @@ function parseArgument() {
 }
 
 function boolArg(args, key, fallback) {
-  const value = args[key];
+  var value = args[key];
 
   if (value === undefined || value === null || value === "") {
     return fallback;
   }
 
-  const s = String(value).trim().toLowerCase();
+  var s = String(value).trim().toLowerCase();
   return s === "true" || s === "1" || s === "yes" || s === "y";
 }
 
@@ -43,23 +43,28 @@ function notify(subtitle, body) {
 }
 
 function safeDecode(value) {
-  if (value == null) return "";
+  if (value === undefined || value === null) return "";
 
   try {
     return decodeURIComponent(String(value));
-  } catch {
+  } catch (e) {
     return String(value);
   }
 }
 
 function parseRawQuery(url) {
-  const query = String(url || "").split("?")[1]?.split("#")[0] || "";
-  const out = {};
+  var query = String(url || "").split("?")[1];
 
-  query.split("&").forEach(pair => {
+  if (!query) return {};
+
+  query = query.split("#")[0];
+
+  var out = {};
+
+  query.split("&").forEach(function(pair) {
     if (!pair) return;
 
-    const idx = pair.indexOf("=");
+    var idx = pair.indexOf("=");
 
     if (idx < 0) {
       out[pair] = "";
@@ -71,50 +76,68 @@ function parseRawQuery(url) {
   return out;
 }
 
+function getHeader(headers, name) {
+  var target = String(name || "").toLowerCase();
+
+  for (var key in headers) {
+    if (Object.prototype.hasOwnProperty.call(headers, key)) {
+      if (String(key).toLowerCase() === target) {
+        return String(headers[key] || "");
+      }
+    }
+  }
+
+  return "";
+}
+
 function emailKeyOf(paramsRaw) {
-  const raw = paramsRaw && paramsRaw.email;
+  var raw = paramsRaw && paramsRaw.email;
   return raw ? safeDecode(raw).trim().toLowerCase() : "";
 }
 
 function simpleHash(input) {
-  let h = 2166136261;
-  const s = String(input || "");
+  var h = 2166136261;
+  var s = String(input || "");
 
-  for (let i = 0; i < s.length; i++) {
+  for (var i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
     h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
   }
 
-  return (h >>> 0).toString(16).padStart(8, "0");
+  return (h >>> 0).toString(16);
 }
 
 function fingerprintOf(paramsRaw) {
-  const email = emailKeyOf(paramsRaw);
+  var email = emailKeyOf(paramsRaw);
   if (email) return email;
 
-  const volatileKeys = new Set([
-    "sign",
-    "signDate",
-    "timestamp",
-    "ts",
-    "nonce",
-    "random",
-    "reqTime",
-    "reqId",
-    "requestId"
-  ]);
+  var volatileKeys = {
+    sign: true,
+    signDate: true,
+    timestamp: true,
+    ts: true,
+    nonce: true,
+    random: true,
+    reqTime: true,
+    reqId: true,
+    requestId: true
+  };
 
-  const base = Object.keys(paramsRaw || {})
-    .filter(key => !volatileKeys.has(key))
+  var base = Object.keys(paramsRaw || {})
+    .filter(function(key) {
+      return !volatileKeys[key];
+    })
     .sort()
-    .map(key => `${key}=${paramsRaw[key]}`)
+    .map(function(key) {
+      return key + "=" + paramsRaw[key];
+    })
     .join("&");
 
   return "fp_" + simpleHash(base);
 }
 
 function loadStore() {
-  const raw = $persistentStore.read(STORE_KEY);
+  var raw = $persistentStore.read(STORE_KEY);
 
   if (!raw) {
     return {
@@ -125,10 +148,10 @@ function loadStore() {
   }
 
   try {
-    const store = JSON.parse(raw);
+    var store = JSON.parse(raw);
 
     if (!store || typeof store !== "object") {
-      throw new Error("invalid store");
+      throw new Error("Invalid store");
     }
 
     if (!store.accounts || typeof store.accounts !== "object") {
@@ -139,11 +162,14 @@ function loadStore() {
       store.order = Object.keys(store.accounts);
     }
 
-    store.order = store.order.filter(id => store.accounts[id]);
+    store.order = store.order.filter(function(id) {
+      return store.accounts[id];
+    });
+
     store.version = 3;
 
     return store;
-  } catch {
+  } catch (e) {
     return {
       version: 3,
       accounts: {},
@@ -161,116 +187,126 @@ function saveStore(store) {
     store.order = Object.keys(store.accounts);
   }
 
-  store.order = store.order.filter(id => store.accounts[id]);
+  store.order = store.order.filter(function(id) {
+    return store.accounts[id];
+  });
+
   store.version = 3;
 
-  $persistentStore.write(JSON.stringify(store), STORE_KEY);
+  return $persistentStore.write(JSON.stringify(store), STORE_KEY);
 }
 
 function maskAccount(text, showSensitive) {
-  const s = String(text || "");
+  var s = String(text || "");
 
   if (showSensitive) return s;
 
-  if (!s.includes("@")) {
-    return s.length > 12 ? `${s.slice(0, 6)}…${s.slice(-4)}` : s;
+  if (s.indexOf("@") < 0) {
+    return s.length > 12 ? s.slice(0, 6) + "..." + s.slice(-4) : s;
   }
 
-  const parts = s.split("@");
-  const name = parts[0] || "";
-  const domain = parts[1] || "";
+  var parts = s.split("@");
+  var name = parts[0] || "";
+  var domain = parts[1] || "";
 
-  const maskedName =
+  var maskedName =
     name.length <= 2
-      ? `${name[0] || "*"}*`
-      : `${name.slice(0, 2)}***${name.slice(-1)}`;
+      ? (name[0] || "*") + "*"
+      : name.slice(0, 2) + "***" + name.slice(-1);
 
-  return `${maskedName}@${domain}`;
+  return maskedName + "@" + domain;
 }
 
 function formatAccountList(store, showSensitive) {
-  const ids = (store.order || []).filter(id => store.accounts[id]);
+  var ids = (store.order || []).filter(function(id) {
+    return store.accounts[id];
+  });
 
   if (!ids.length) {
-    return "当前未保存账号。";
+    return "No saved account.";
   }
 
   return ids
-    .map((id, index) => {
-      const acc = store.accounts[id];
-      const label = acc.alias || acc.email || acc.id || id;
-      const display = maskAccount(label, showSensitive);
-      const updated = acc.updatedAt
-        ? new Date(acc.updatedAt).toLocaleString()
-        : "未知时间";
+    .map(function(id, index) {
+      var acc = store.accounts[id];
+      var label = acc.alias || acc.email || acc.id || id;
+      var display = maskAccount(label, showSensitive);
+      var updated = acc.updatedAt ? new Date(acc.updatedAt).toLocaleString() : "unknown";
 
       return [
-        `${index + 1}. ${display}`,
-        `ID: ${maskAccount(id, showSensitive)}`,
-        `更新时间: ${updated}`
+        String(index + 1) + ". " + display,
+        "ID: " + maskAccount(id, showSensitive),
+        "Updated: " + updated
       ].join("\n");
     })
     .join("\n\n");
 }
 
 function main() {
-  const args = parseArgument();
+  var args = parseArgument();
 
   if (!boolArg(args, "CAPTURE_ENABLED", true)) {
+    console.log("[WeTalk Capture] disabled");
     $done({});
     return;
   }
 
   if (typeof $request === "undefined" || !$request || !$request.url) {
-    notify("抓取失败", "未检测到 $request，请确认脚本类型为 http-request。");
+    console.log("[WeTalk Capture] no request object");
+    notify("Capture Failed", "No request object. Please check script type.");
     $done({});
     return;
   }
 
-  const paramsRaw = parseRawQuery($request.url);
+  console.log("[WeTalk Capture] matched url: " + $request.url);
+
+  var paramsRaw = parseRawQuery($request.url);
 
   if (!Object.keys(paramsRaw).length) {
-    notify("抓取失败", "当前请求未解析到 URL 参数。");
+    console.log("[WeTalk Capture] no query parameters");
+    notify("Capture Failed", "No query parameters found.");
     $done({});
     return;
   }
 
-  const headers = $request.headers || {};
-  const email = emailKeyOf(paramsRaw);
-  const accountId = email || fingerprintOf(paramsRaw);
-  const now = Date.now();
+  var headers = $request.headers || {};
+  var email = emailKeyOf(paramsRaw);
+  var accountId = email || fingerprintOf(paramsRaw);
+  var now = Date.now();
 
-  const store = loadStore();
-  const existed = Boolean(store.accounts[accountId]);
-  const previous = store.accounts[accountId] || {};
+  var store = loadStore();
+  var existed = !!store.accounts[accountId];
+  var previous = store.accounts[accountId] || {};
 
   store.accounts[accountId] = {
     id: accountId,
-    email,
+    email: email,
     alias: previous.alias || email || accountId,
     uaSeed: Number.isInteger(previous.uaSeed) ? previous.uaSeed : store.order.length,
-    baseUA: headers["User-Agent"] || headers["user-agent"] || "",
+    baseUA: getHeader(headers, "User-Agent"),
     capture: {
       url: $request.url,
-      paramsRaw,
-      headers
+      paramsRaw: paramsRaw,
+      headers: headers
     },
     createdAt: previous.createdAt || now,
     updatedAt: now
   };
 
-  if (!existed && !store.order.includes(accountId)) {
+  if (!existed && store.order.indexOf(accountId) < 0) {
     store.order.push(accountId);
   }
 
-  saveStore(store);
+  var ok = saveStore(store);
+  var showSensitive = boolArg(args, "SHOW_SENSITIVE", false);
+  var list = formatAccountList(store, showSensitive);
 
-  const showSensitive = boolArg(args, "SHOW_SENSITIVE", false);
-  const list = formatAccountList(store, showSensitive);
+  console.log("[WeTalk Capture] saved: " + String(ok));
+  console.log("[WeTalk Capture] account count: " + store.order.length);
 
   notify(
-    existed ? "账号参数已更新" : "新账号已入库",
-    `当前账号总数：${store.order.length}\n\n${list}`
+    existed ? "Account Updated" : "Account Captured",
+    "Saved: " + String(ok) + "\nCount: " + store.order.length + "\n\n" + list
   );
 
   $done({});
@@ -279,6 +315,7 @@ function main() {
 try {
   main();
 } catch (e) {
-  notify("抓取异常", e.message || String(e));
+  console.log("[WeTalk Capture] error: " + (e.message || String(e)));
+  notify("Capture Error", e.message || String(e));
   $done({});
 }
