@@ -6,8 +6,8 @@
 force-http-engine-hosts = %APPEND% api.wetalkapp.com
 
 [Script]
-WeTalk 获取签到参数 = type=http-request, pattern=^https:\/\/api\.wetalkapp\.com\/app\/queryBalanceAndBonus, script-path=WeTalk_Surge.js, requires-body=false, timeout=60
-WeTalk 签到 = type=cron, cronexp="20 8,20 * * *", script-path=WeTalk_Surge.js, timeout=300
+WeTalk 获取签到参数 = type=http-request, pattern=^https:\/\/api\.wetalkapp\.com\/app\/queryBalanceAndBonus, script-path=https://raw.githubusercontent.com/JuemingDC/Surge/refs/heads/main/JavaScript/Wetalk/Wetalk_capture.js, requires-body=false, timeout=60
+WeTalk 签到 = type=cron, cronexp="20 8,20 * * *", script-path=https://raw.githubusercontent.com/JuemingDC/Surge/refs/heads/main/JavaScript/Wetalk/Wetalk_task.js, timeout=300
 
 [MITM]
 hostname = %APPEND% api.wetalkapp.com
