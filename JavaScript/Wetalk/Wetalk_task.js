@@ -11,12 +11,6 @@ const MAX_VIDEO = 5;
 const VIDEO_DELAY = 8000;
 const ACCOUNT_GAP = 3500;
 
-const IOS_VERSIONS = ["17.5.1", "17.6.1", "17.4.1", "17.2.1", "16.7.8", "17.6", "17.3.1", "18.0.1", "17.1.2", "16.6.1"];
-const IOS_SCALES = ["2.00", "3.00", "3.00", "2.00", "3.00"];
-const IPHONE_MODELS = ["iPhone14,3", "iPhone13,3", "iPhone15,3", "iPhone16,1", "iPhone14,7", "iPhone13,2", "iPhone15,2", "iPhone12,1"];
-const CFN_VERS = ["1410.0.3", "1494.0.7", "1568.100.1", "1209.1", "1474.0.4", "1568.200.2"];
-const DARWIN_VERS = ["22.6.0", "23.5.0", "23.6.0", "24.0.0", "22.4.0"];
-
 function notify(subtitle, body) {
   $notification.post(SCRIPT_NAME, subtitle || "", body || "");
 }
@@ -31,7 +25,14 @@ function sleep(ms) {
 
 function readStore() {
   const raw = $persistentStore.read(STORE_KEY);
-  if (!raw) return { version: 2, accounts: {}, order: [] };
+
+  if (!raw) {
+    return {
+      version: 2,
+      accounts: {},
+      order: []
+    };
+  }
 
   try {
     const data = JSON.parse(raw);
@@ -39,7 +40,11 @@ function readStore() {
     if (!Array.isArray(data.order)) data.order = Object.keys(data.accounts);
     return data;
   } catch (e) {
-    return { version: 2, accounts: {}, order: [] };
+    return {
+      version: 2,
+      accounts: {},
+      order: []
+    };
   }
 }
 
@@ -50,8 +55,14 @@ function writeStore(data) {
 function httpGet(options) {
   return new Promise((resolve, reject) => {
     $httpClient.get(options, function (error, response, data) {
-      if (error) reject(error);
-      else resolve({ response: response, body: data });
+      if (error) {
+        reject(error);
+      } else {
+        resolve({
+          response: response,
+          body: data
+        });
+      }
     });
   });
 }
@@ -132,11 +143,13 @@ function MD5(string) {
 
   function WordToHex(lValue) {
     let WordToHexValue = "";
+
     for (let lCount = 0; lCount <= 3; lCount++) {
       const lByte = (lValue >>> (lCount * 8)) & 255;
       const WordToHexValueTemp = "0" + lByte.toString(16);
       WordToHexValue += WordToHexValueTemp.substr(WordToHexValueTemp.length - 2, 2);
     }
+
     return WordToHexValue;
   }
 
@@ -152,7 +165,10 @@ function MD5(string) {
   const S41 = 6, S42 = 10, S43 = 15, S44 = 21;
 
   for (let k = 0; k < x.length; k += 16) {
-    const AA = a, BB = b, CC = c, DD = d;
+    const AA = a;
+    const BB = b;
+    const CC = c;
+    const DD = d;
 
     a = FF(a, b, c, d, x[k + 0], S11, 0xd76aa478);
     d = FF(d, a, b, c, x[k + 1], S12, 0xe8c7b756);
@@ -234,61 +250,23 @@ function MD5(string) {
 function getUTCSignDate() {
   const now = new Date();
   const pad = n => String(n).padStart(2, "0");
-  return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
-}
 
-function pickItem(arr, seed) {
-  return arr[Math.abs(seed || 0) % arr.length];
-}
-
-function buildUA(baseUA, seed) {
-  const iosVer = pickItem(IOS_VERSIONS, seed);
-  const scale = pickItem(IOS_SCALES, seed + 1);
-  const model = pickItem(IPHONE_MODELS, seed + 2);
-  const cfn = pickItem(CFN_VERS, seed + 3);
-  const darwin = pickItem(DARWIN_VERS, seed + 4);
-
-  if (baseUA && typeof baseUA === "string") {
-    let ua = baseUA;
-    let changed = false;
-
-    if (/iOS \d+(\.\d+){0,2}/.test(ua)) {
-      ua = ua.replace(/iOS \d+(\.\d+){0,2}/, `iOS ${iosVer}`);
-      changed = true;
-    }
-
-    if (/Scale\/\d+(\.\d+)?/.test(ua)) {
-      ua = ua.replace(/Scale\/\d+(\.\d+)?/, `Scale/${scale}`);
-      changed = true;
-    }
-
-    if (/iPhone\d+,\d+/.test(ua)) {
-      ua = ua.replace(/iPhone\d+,\d+/, model);
-      changed = true;
-    }
-
-    if (/CFNetwork\/[\d.]+/.test(ua)) {
-      ua = ua.replace(/CFNetwork\/[\d.]+/, `CFNetwork/${cfn}`);
-      changed = true;
-    }
-
-    if (/Darwin\/[\d.]+/.test(ua)) {
-      ua = ua.replace(/Darwin\/[\d.]+/, `Darwin/${darwin}`);
-      changed = true;
-    }
-
-    if (changed) return ua;
-  }
-
-  return `WeTalk/30.6.0 (com.innovationworks.wetalk; build:28; iOS ${iosVer}) Alamofire/5.4.3`;
+  return (
+    now.getUTCFullYear() + "-" +
+    pad(now.getUTCMonth() + 1) + "-" +
+    pad(now.getUTCDate()) + " " +
+    pad(now.getUTCHours()) + ":" +
+    pad(now.getUTCMinutes()) + ":" +
+    pad(now.getUTCSeconds())
+  );
 }
 
 function buildSignedParamsRaw(capture) {
   const params = {};
 
-  Object.keys(capture.paramsRaw || {}).forEach(k => {
-    if (k !== "sign" && k !== "signDate") {
-      params[k] = capture.paramsRaw[k];
+  Object.keys(capture.paramsRaw || {}).forEach(key => {
+    if (key !== "sign" && key !== "signDate") {
+      params[key] = capture.paramsRaw[key];
     }
   });
 
@@ -296,7 +274,7 @@ function buildSignedParamsRaw(capture) {
 
   const signBase = Object.keys(params)
     .sort()
-    .map(k => `${k}=${params[k]}`)
+    .map(key => `${key}=${params[key]}`)
     .join("&");
 
   params.sign = MD5(signBase + SECRET);
@@ -304,33 +282,42 @@ function buildSignedParamsRaw(capture) {
   return params;
 }
 
-function buildUrl(path, capture) {
-  const params = buildSignedParamsRaw(capture);
+// 关键修复：保留原始抓取参数，不对 email、deviceId 等已编码参数二次 encode。
+function buildQueryPreserveRaw(params) {
+  return Object.keys(params)
+    .map(key => {
+      if (key === "signDate" || key === "sign") {
+        return `${key}=${encodeURIComponent(params[key])}`;
+      }
 
-  const qs = Object.keys(params)
-    .map(k => `${k}=${encodeURIComponent(params[k])}`)
+      return `${key}=${params[key]}`;
+    })
     .join("&");
-
-  return `https://${API_HOST}/app/${path}?${qs}`;
 }
 
-function buildHeaders(capture, ua) {
+function buildUrl(path, capture) {
+  const params = buildSignedParamsRaw(capture);
+  return `https://${API_HOST}/app/${path}?${buildQueryPreserveRaw(params)}`;
+}
+
+function buildHeaders(capture) {
   const headers = {};
 
-  Object.keys(capture.headers || {}).forEach(k => {
-    const lower = k.toLowerCase();
+  Object.keys(capture.headers || {}).forEach(key => {
+    const lower = key.toLowerCase();
 
     if (lower === "content-length") return;
     if (lower === "host") return;
-    if (lower === "user-agent") return;
-    if (k.indexOf(":") === 0) return;
+    if (key.indexOf(":") === 0) return;
 
-    headers[k] = capture.headers[k];
+    headers[key] = capture.headers[key];
   });
 
   headers["Host"] = API_HOST;
-  headers["Accept"] = headers["Accept"] || "application/json";
-  headers["User-Agent"] = ua;
+
+  if (!headers["Accept"] && !headers["accept"]) {
+    headers["Accept"] = "application/json";
+  }
 
   return headers;
 }
@@ -343,115 +330,127 @@ function parseJson(text) {
   }
 }
 
-function getBalance(d) {
-  return d && d.result && d.result.balance != null ? d.result.balance : "?";
+function getBalance(data) {
+  return data && data.result && data.result.balance != null ? data.result.balance : "?";
 }
 
-function getBonus(d) {
-  return d && d.result && d.result.bonus != null ? d.result.bonus : "?";
+function getBonus(data) {
+  return data && data.result && data.result.bonus != null ? data.result.bonus : "?";
 }
 
-function getBonusHint(d) {
-  if (d && d.result && d.result.bonusHint) return String(d.result.bonusHint).replace(/\n/g, " ");
-  if (d && d.retmsg) return d.retmsg;
+function getMessage(data) {
+  if (data && data.result && data.result.bonusHint) {
+    return String(data.result.bonusHint).replace(/\n/g, " ");
+  }
+
+  if (data && data.retmsg) return data.retmsg;
+
   return "";
 }
 
-async function fetchApi(path, acc) {
-  const ua = buildUA(acc.baseUA, acc.uaSeed || 0);
+async function requestApi(path, account) {
   const options = {
-    url: buildUrl(path, acc.capture),
-    headers: buildHeaders(acc.capture, ua),
+    url: buildUrl(path, account.capture),
+    headers: buildHeaders(account.capture),
     timeout: 30,
     "auto-cookie": false
   };
 
-  const res = await httpGet(options);
-  return parseJson(res.body);
+  console.log(`[WeTalk Debug] ${path} URL: ${options.url}`);
+
+  const result = await httpGet(options);
+  const data = parseJson(result.body);
+
+  console.log(`[WeTalk Debug] ${path} response: ${result.body}`);
+
+  return data;
 }
 
-async function runAccount(acc, index, total) {
-  const tag = `[${index + 1}/${total}] ${acc.alias || acc.email || acc.id}`;
-  const msgs = [tag];
+async function runAccount(account, index, total) {
+  const name = account.alias || account.email || account.id || `账号${index + 1}`;
+  const logs = [`[${index + 1}/${total}] ${name}`];
 
   try {
-    const before = await fetchApi("queryBalanceAndBonus", acc);
+    const before = await requestApi("queryBalanceAndBonus", account);
+
     if (before.retcode === 0) {
-      msgs.push(`余额：${getBalance(before)} Coins`);
+      logs.push(`当前余额：${getBalance(before)} Coins`);
     } else {
-      msgs.push(`查询：${before.retmsg || "失败"}`);
+      logs.push(`余额查询：${before.retmsg || "失败"}`);
     }
 
-    const checkIn = await fetchApi("checkIn", acc);
+    const checkIn = await requestApi("checkIn", account);
+
     if (checkIn.retcode === 0) {
-      msgs.push(`签到：${getBonusHint(checkIn) || "成功"}`);
+      logs.push(`签到：${getMessage(checkIn) || "成功"}`);
     } else {
-      msgs.push(`签到：${checkIn.retmsg || "失败"}`);
+      logs.push(`签到：${checkIn.retmsg || "失败"}`);
     }
 
     for (let i = 1; i <= MAX_VIDEO; i++) {
       if (i > 1) await sleep(VIDEO_DELAY);
 
-      const video = await fetchApi("videoBonus", acc);
+      const video = await requestApi("videoBonus", account);
+
       if (video.retcode === 0) {
-        msgs.push(`视频${i}：+${getBonus(video)} Coins`);
+        logs.push(`视频${i}：+${getBonus(video)} Coins`);
       } else {
-        msgs.push(`视频${i}：${video.retmsg || "停止"}`);
+        logs.push(`视频${i}：${video.retmsg || "停止"}`);
         break;
       }
     }
 
-    const after = await fetchApi("queryBalanceAndBonus", acc);
+    const after = await requestApi("queryBalanceAndBonus", account);
+
     if (after.retcode === 0) {
-      msgs.push(`最新余额：${getBalance(after)} Coins`);
+      logs.push(`最新余额：${getBalance(after)} Coins`);
     }
   } catch (e) {
-    msgs.push(`异常：${String(e && e.message ? e.message : e)}`);
+    logs.push(`异常：${String(e && e.message ? e.message : e)}`);
   }
 
-  return msgs.join("\n");
+  return logs.join("\n");
 }
 
 async function main() {
   const store = readStore();
 
-  // 清理旧版错误 fp_ 账号
   Object.keys(store.accounts || {}).forEach(id => {
+    const account = store.accounts[id];
+
     if (/^fp_[a-f0-9]+$/i.test(id)) {
+      delete store.accounts[id];
+      return;
+    }
+
+    if (!account || !account.capture || !account.capture.paramsRaw || !account.capture.headers) {
       delete store.accounts[id];
     }
   });
 
-  store.order = (store.order || []).filter(id => {
-    const acc = store.accounts[id];
-    if (!acc) return false;
-    if (/^fp_[a-f0-9]+$/i.test(id)) return false;
-    if (!acc.email) return false;
-    if (!acc.capture || !acc.capture.paramsRaw || !acc.capture.headers) return false;
-    return true;
-  });
-
+  store.order = (store.order || []).filter(id => store.accounts[id]);
   writeStore(store);
 
-  if (!store.order.length) {
-    notify("未找到有效账号", "旧 fp_ 账号已清理。请重新打开 WeTalk，触发 queryBalanceAndBonus 完成抓取。");
+  const ids = store.order.filter(id => store.accounts[id]);
+
+  if (!ids.length) {
+    notify("未找到有效账号", "请先清空旧账号，然后重新打开 WeTalk 触发 queryBalanceAndBonus 抓取。");
     finish();
     return;
   }
 
   const results = [];
 
-  for (let i = 0; i < store.order.length; i++) {
-    const id = store.order[i];
-    const text = await runAccount(store.accounts[id], i, store.order.length);
+  for (let i = 0; i < ids.length; i++) {
+    const text = await runAccount(store.accounts[ids[i]], i, ids.length);
     results.push(text);
 
-    if (i < store.order.length - 1) {
+    if (i < ids.length - 1) {
       await sleep(ACCOUNT_GAP);
     }
   }
 
-  notify(`全部完成：${store.order.length} 个账号`, results.join("\n———\n"));
+  notify(`任务完成：${ids.length} 个账号`, results.join("\n———\n"));
   finish();
 }
 
