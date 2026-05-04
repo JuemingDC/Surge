@@ -1,283 +1,153 @@
-/*
- * WeTalk_account_manager.js - Surge 账号管理脚本
- * 类型：generic
- */
+// WeTalk_Manage.js
+// Surge only
+// type=generic
+//
+// argument 用法：
+// action=list
+// action=clear
+// action=delete&email=xxx@example.com
 
-const SCRIPT_NAME = "WeTalk账号管理";
+const SCRIPT_NAME = "WeTalk";
 const STORE_KEY = "wetalk_accounts_v1";
-
-function parseArgument() {
-  const raw = typeof $argument === "string" ? $argument : "";
-  const out = {};
-
-  raw.split("&").forEach(pair => {
-    if (!pair) return;
-
-    const idx = pair.indexOf("=");
-    const key = idx >= 0 ? pair.slice(0, idx) : pair;
-    const val = idx >= 0 ? pair.slice(idx + 1) : "";
-
-    try {
-      out[decodeURIComponent(key)] = decodeURIComponent(val.replace(/\+/g, "%20"));
-    } catch {
-      out[key] = val;
-    }
-  });
-
-  return out;
-}
 
 function notify(subtitle, body) {
   $notification.post(SCRIPT_NAME, subtitle || "", body || "");
 }
 
-function boolValue(value, fallback) {
-  if (value === undefined || value === null || value === "") {
-    return fallback;
-  }
-
-  const s = String(value).trim().toLowerCase();
-  return s === "true" || s === "1" || s === "yes" || s === "y";
+function done() {
+  $done();
 }
 
-function loadStore() {
-  const raw = $persistentStore.read(STORE_KEY);
+function parseArgument(text) {
+  const result = {};
+  const raw = String(text || "").trim();
 
-  if (!raw) {
-    return {
-      version: 3,
-      accounts: {},
-      order: []
-    };
-  }
+  if (!raw) return result;
 
-  try {
-    const store = JSON.parse(raw);
+  raw.split("&").forEach(part => {
+    if (!part) return;
 
-    if (!store || typeof store !== "object") {
-      throw new Error("invalid store");
+    const index = part.indexOf("=");
+    if (index < 0) {
+      result[decodeSafe(part)] = "true";
+      return;
     }
 
-    if (!store.accounts || typeof store.accounts !== "object") {
-      store.accounts = {};
-    }
-
-    if (!Array.isArray(store.order)) {
-      store.order = Object.keys(store.accounts);
-    }
-
-    store.order = store.order.filter(id => store.accounts[id]);
-    store.version = 3;
-
-    return store;
-  } catch {
-    return {
-      version: 3,
-      accounts: {},
-      order: []
-    };
-  }
-}
-
-function saveStore(store) {
-  if (!store.accounts || typeof store.accounts !== "object") {
-    store.accounts = {};
-  }
-
-  if (!Array.isArray(store.order)) {
-    store.order = Object.keys(store.accounts);
-  }
-
-  store.order = store.order.filter(id => store.accounts[id]);
-  store.version = 3;
-
-  $persistentStore.write(JSON.stringify(store), STORE_KEY);
-}
-
-function splitList(value) {
-  return String(value || "")
-    .split(/[\n,，;；\s]+/)
-    .map(s => s.trim())
-    .filter(Boolean);
-}
-
-function formatTime(timestamp) {
-  if (!timestamp) return "未知时间";
-
-  try {
-    return new Date(timestamp).toLocaleString();
-  } catch {
-    return "未知时间";
-  }
-}
-
-function formatAccountList(store) {
-  const ids = (store.order || []).filter(id => store.accounts[id]);
-
-  if (!ids.length) {
-    return "当前未保存账号。";
-  }
-
-  return ids
-    .map((id, index) => {
-      const acc = store.accounts[id] || {};
-      const label = acc.alias || acc.email || acc.id || id;
-
-      return [
-        `${index + 1}. ${label}`,
-        `id: ${id}`,
-        `email: ${acc.email || ""}`,
-        `alias: ${acc.alias || ""}`,
-        `hasCapture: ${acc.capture && acc.capture.paramsRaw ? "yes" : "no"}`,
-        `updatedAt: ${formatTime(acc.updatedAt)}`
-      ].join("\n");
-    })
-    .join("\n\n");
-}
-
-function normalizeText(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function matchAccountIds(store, tokens) {
-  const ids = (store.order || []).filter(id => store.accounts[id]);
-  const result = new Set();
-
-  tokens.forEach(tokenRaw => {
-    const token = normalizeText(tokenRaw);
-
-    if (!token) return;
-
-    if (/^\d+$/.test(token)) {
-      const index = Number(token);
-
-      if (index >= 1 && index <= ids.length) {
-        result.add(ids[index - 1]);
-        return;
-      }
-    }
-
-    ids.forEach(id => {
-      const acc = store.accounts[id] || {};
-
-      const candidates = [id, acc.id, acc.email, acc.alias]
-        .filter(Boolean)
-        .map(v => normalizeText(v));
-
-      if (candidates.includes(token)) {
-        result.add(id);
-      }
-    });
+    const key = decodeSafe(part.slice(0, index));
+    const value = decodeSafe(part.slice(index + 1));
+    result[key] = value;
   });
 
-  return Array.from(result);
+  return result;
+}
+
+function decodeSafe(value) {
+  try {
+    return decodeURIComponent(String(value || ""));
+  } catch (e) {
+    return String(value || "");
+  }
+}
+
+function readStore() {
+  const raw = $persistentStore.read(STORE_KEY);
+  if (!raw) return { version: 1, accounts: {}, order: [] };
+
+  try {
+    const data = JSON.parse(raw);
+    if (!data.accounts) data.accounts = {};
+    if (!Array.isArray(data.order)) data.order = Object.keys(data.accounts);
+    return data;
+  } catch (e) {
+    return { version: 1, accounts: {}, order: [] };
+  }
+}
+
+function writeStore(data) {
+  return $persistentStore.write(JSON.stringify(data), STORE_KEY);
+}
+
+function formatTime(ts) {
+  if (!ts) return "未知";
+  const d = new Date(ts);
+  return d.toLocaleString();
+}
+
+function listAccounts(store) {
+  const ids = store.order.filter(id => store.accounts[id]);
+
+  if (!ids.length) {
+    notify("账号列表", "当前未保存任何 WeTalk 账号。");
+    return;
+  }
+
+  const lines = ids.map((id, index) => {
+    const acc = store.accounts[id];
+    return [
+      `${index + 1}. ${acc.alias || acc.email || id}`,
+      `   email: ${acc.email || id}`,
+      `   updated: ${formatTime(acc.updatedAt)}`
+    ].join("\n");
+  });
+
+  notify(`账号列表：${ids.length} 个`, lines.join("\n\n"));
+}
+
+function clearAccounts() {
+  const empty = { version: 1, accounts: {}, order: [] };
+  const ok = writeStore(empty);
+  notify("清空账号", ok ? "已清空所有 WeTalk 账号。" : "清空失败。");
+}
+
+function deleteAccount(store, email) {
+  const key = String(email || "").trim().toLowerCase();
+
+  if (!key) {
+    notify("删除失败", "缺少 email 参数。示例：action=delete&email=xxx@example.com");
+    return;
+  }
+
+  if (!store.accounts[key]) {
+    notify("删除失败", `未找到账号：${key}`);
+    return;
+  }
+
+  delete store.accounts[key];
+  store.order = store.order.filter(id => id !== key);
+
+  const ok = writeStore(store);
+  notify("删除账号", ok ? `已删除：${key}` : "保存失败。");
 }
 
 function main() {
-  const args = parseArgument();
-  const store = loadStore();
+  const args = parseArgument(typeof $argument !== "undefined" ? $argument : "");
+  const action = String(args.action || "list").toLowerCase();
+  const store = readStore();
 
-  const deleteInput = args.DELETE_ACCOUNTS || "";
-  const deleteAll = boolValue(args.DELETE_ALL, false);
-  const deleteTokens = splitList(deleteInput);
-  const beforeList = formatAccountList(store);
-
-  if (deleteAll) {
-    const count = Object.keys(store.accounts || {}).length;
-
-    store.accounts = {};
-    store.order = [];
-
-    saveStore(store);
-
+  if (action === "list") {
+    listAccounts(store);
+  } else if (action === "clear") {
+    clearAccounts();
+  } else if (action === "delete") {
+    deleteAccount(store, args.email);
+  } else {
     notify(
-      "已清空全部账号",
+      "未知操作",
       [
-        `删除前账号数：${count}`,
-        "",
-        "已执行清空。",
-        "",
-        "请立刻回到模块参数，把 DELETE_ALL 改回 false，避免下次误删。"
+        "支持的 action：",
+        "1. action=list",
+        "2. action=clear",
+        "3. action=delete&email=xxx@example.com"
       ].join("\n")
     );
-
-    return;
   }
 
-  if (!deleteTokens.length) {
-    notify(
-      `当前账号：${store.order.length} 个`,
-      [
-        `DELETE_ACCOUNTS: ${deleteInput || "(空)"}`,
-        `DELETE_ALL: ${String(args.DELETE_ALL ?? "(空)")}`,
-        "",
-        "当前账号列表：",
-        beforeList,
-        "",
-        "删除方法：",
-        "1. 回到 Surge 模块参数",
-        "2. 在 DELETE_ACCOUNTS 填写编号，例如 2",
-        "3. 保存模块参数",
-        "4. 手动运行“WeTalk 账号管理”",
-        "5. 删除完成后清空 DELETE_ACCOUNTS"
-      ].join("\n")
-    );
-
-    return;
-  }
-
-  const matchedIds = matchAccountIds(store, deleteTokens);
-
-  if (!matchedIds.length) {
-    notify(
-      "未匹配到要删除的账号",
-      [
-        `删除输入：${deleteInput}`,
-        "",
-        "当前账号列表：",
-        beforeList,
-        "",
-        "建议：优先使用账号编号删除，例如 1 或 2。"
-      ].join("\n")
-    );
-
-    return;
-  }
-
-  const deleted = [];
-
-  matchedIds.forEach(id => {
-    const acc = store.accounts[id] || {};
-    deleted.push(acc.alias || acc.email || acc.id || id);
-    delete store.accounts[id];
-  });
-
-  saveStore(store);
-
-  const afterStore = loadStore();
-
-  notify(
-    "账号已删除",
-    [
-      `删除输入：${deleteInput}`,
-      "",
-      "已删除：",
-      ...deleted.map(x => `- ${x}`),
-      "",
-      `删除后账号数：${afterStore.order.length}`,
-      "",
-      "剩余账号列表：",
-      formatAccountList(afterStore),
-      "",
-      "请回到模块参数，把 DELETE_ACCOUNTS 清空，避免下次误删。"
-    ].join("\n")
-  );
+  done();
 }
 
 try {
   main();
 } catch (e) {
-  notify("账号管理异常", e.message || String(e));
-} finally {
-  $done();
+  notify("账号管理异常", String(e && e.stack ? e.stack : e));
+  done();
 }
