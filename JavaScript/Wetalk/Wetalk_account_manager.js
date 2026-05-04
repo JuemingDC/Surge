@@ -1,11 +1,6 @@
 // WeTalk_Manage.js
 // Surge only
 // type=generic
-//
-// argument 用法：
-// action=list
-// action=clear
-// action=delete&email=xxx@example.com
 
 const SCRIPT_NAME = "WeTalk";
 const STORE_KEY = "wetalk_accounts_v1";
@@ -14,8 +9,16 @@ function notify(subtitle, body) {
   $notification.post(SCRIPT_NAME, subtitle || "", body || "");
 }
 
-function done() {
+function finish() {
   $done();
+}
+
+function decodeSafe(value) {
+  try {
+    return decodeURIComponent(String(value || ""));
+  } catch (e) {
+    return String(value || "");
+  }
 }
 
 function parseArgument(text) {
@@ -41,17 +44,9 @@ function parseArgument(text) {
   return result;
 }
 
-function decodeSafe(value) {
-  try {
-    return decodeURIComponent(String(value || ""));
-  } catch (e) {
-    return String(value || "");
-  }
-}
-
 function readStore() {
   const raw = $persistentStore.read(STORE_KEY);
-  if (!raw) return { version: 1, accounts: {}, order: [] };
+  if (!raw) return { version: 2, accounts: {}, order: [] };
 
   try {
     const data = JSON.parse(raw);
@@ -59,7 +54,7 @@ function readStore() {
     if (!Array.isArray(data.order)) data.order = Object.keys(data.accounts);
     return data;
   } catch (e) {
-    return { version: 1, accounts: {}, order: [] };
+    return { version: 2, accounts: {}, order: [] };
   }
 }
 
@@ -69,15 +64,35 @@ function writeStore(data) {
 
 function formatTime(ts) {
   if (!ts) return "未知";
-  const d = new Date(ts);
-  return d.toLocaleString();
+  return new Date(ts).toLocaleString();
+}
+
+function cleanInvalid(store) {
+  Object.keys(store.accounts || {}).forEach(id => {
+    const acc = store.accounts[id];
+
+    if (/^fp_[a-f0-9]+$/i.test(id)) {
+      delete store.accounts[id];
+      return;
+    }
+
+    if (!acc || !acc.email || !acc.capture || !acc.capture.paramsRaw || !acc.capture.headers) {
+      delete store.accounts[id];
+    }
+  });
+
+  store.order = (store.order || []).filter(id => store.accounts[id]);
+  return store;
 }
 
 function listAccounts(store) {
+  store = cleanInvalid(store);
+  writeStore(store);
+
   const ids = store.order.filter(id => store.accounts[id]);
 
   if (!ids.length) {
-    notify("账号列表", "当前未保存任何 WeTalk 账号。");
+    notify("账号列表", "当前没有有效 WeTalk 账号。请重新触发 queryBalanceAndBonus 抓取。");
     return;
   }
 
@@ -85,8 +100,8 @@ function listAccounts(store) {
     const acc = store.accounts[id];
     return [
       `${index + 1}. ${acc.alias || acc.email || id}`,
-      `   email: ${acc.email || id}`,
-      `   updated: ${formatTime(acc.updatedAt)}`
+      `email: ${acc.email || id}`,
+      `updated: ${formatTime(acc.updatedAt)}`
     ].join("\n");
   });
 
@@ -94,8 +109,7 @@ function listAccounts(store) {
 }
 
 function clearAccounts() {
-  const empty = { version: 1, accounts: {}, order: [] };
-  const ok = writeStore(empty);
+  const ok = writeStore({ version: 2, accounts: {}, order: [] });
   notify("清空账号", ok ? "已清空所有 WeTalk 账号。" : "清空失败。");
 }
 
@@ -131,23 +145,15 @@ function main() {
   } else if (action === "delete") {
     deleteAccount(store, args.email);
   } else {
-    notify(
-      "未知操作",
-      [
-        "支持的 action：",
-        "1. action=list",
-        "2. action=clear",
-        "3. action=delete&email=xxx@example.com"
-      ].join("\n")
-    );
+    notify("未知操作", "支持 action=list、action=clear、action=delete&email=xxx@example.com");
   }
 
-  done();
+  finish();
 }
 
 try {
   main();
 } catch (e) {
   notify("账号管理异常", String(e && e.stack ? e.stack : e));
-  done();
+  finish();
 }
