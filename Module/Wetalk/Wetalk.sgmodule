@@ -1,14 +1,13 @@
-#!name=WeTalk Auto Checkin
-#!desc=Capture WeTalk account parameters and run checkin or video bonus tasks automatically.
-#!author=TG@ZenMoFiShi, modified for Surge
-#!arguments=CAPTURE_ENABLED=true&TASK_ENABLED=true&ENABLE_CHECKIN=true&ENABLE_VIDEO=true&MAX_VIDEO=5&VIDEO_DELAY_MS=8000&ACCOUNT_GAP_MS=3500&RUN_ACCOUNTS=&DELETE_ACCOUNTS=&DELETE_ALL=false&SHOW_SENSITIVE=false
+#!name=WeTalk 自动签到
+#!desc=WeTalk 签到与视频奖励。首次使用需打开 WeTalk 触发 queryBalanceAndBonus 请求完成参数抓取；之后按 cron 定时运行。
+#!system=ios
+
+[General]
+force-http-engine-hosts = %APPEND% api.wetalkapp.com
 
 [Script]
-WeTalk_Capture = type=http-request, pattern=^https:\/\/api\.wetalkapp\.com\/app\/queryBalanceAndBonus, requires-body=false, script-path=https://raw.githubusercontent.com/JuemingDC/Surge/refs/heads/main/JavaScript/Wetalk/Wetalk_capture.js, script-update-interval=0, timeout=10, argument=CAPTURE_ENABLED=%CAPTURE_ENABLED%&SHOW_SENSITIVE=%SHOW_SENSITIVE%
-
-WeTalk_Task = type=cron, cronexp="20 8,20 * * *", script-path=https://raw.githubusercontent.com/JuemingDC/Surge/refs/heads/main/JavaScript/Wetalk/Wetalk_task.js, script-update-interval=0, timeout=120, argument=TASK_ENABLED=%TASK_ENABLED%&ENABLE_CHECKIN=%ENABLE_CHECKIN%&ENABLE_VIDEO=%ENABLE_VIDEO%&MAX_VIDEO=%MAX_VIDEO%&VIDEO_DELAY_MS=%VIDEO_DELAY_MS%&ACCOUNT_GAP_MS=%ACCOUNT_GAP_MS%&RUN_ACCOUNTS=%RUN_ACCOUNTS%
-
-WeTalk_Account_Manager = type=generic, script-path=https://raw.githubusercontent.com/JuemingDC/Surge/refs/heads/main/JavaScript/Wetalk/Wetalk_account_manager.js, script-update-interval=0, timeout=30, argument=DELETE_ACCOUNTS=%DELETE_ACCOUNTS%&DELETE_ALL=%DELETE_ALL%
+WeTalk 获取签到参数 = type=http-request, pattern=^https:\/\/api\.wetalkapp\.com\/app\/queryBalanceAndBonus, script-path=WeTalk_Surge.js, requires-body=false, timeout=60
+WeTalk 签到 = type=cron, cronexp="20 8,20 * * *", script-path=WeTalk_Surge.js, timeout=300
 
 [MITM]
 hostname = %APPEND% api.wetalkapp.com
