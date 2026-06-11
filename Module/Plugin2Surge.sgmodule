@@ -1,14 +1,14 @@
-#!name=PluginHub2Surge by Script Hub
-#!desc=将可莉插件中心 PluginHub 的 Loon 插件导入链接重定向为 Script Hub 的 Surge 模块转换链接。插件中心：https://hub.kelee.one
+#!name=PluginHub2Surge
+#!desc=将可莉插件中心 Loon 插件安装按钮改为：经 Script Hub 转换后跳转 Surge 安装模块
 #!author=iab0x00 / modified for Surge
 #!category=工具
 #!requirement=CORE_VERSION>=20
 
 [Header Rewrite]
-http-request ^https:\/\/hub\.kelee\.one\/list\.json header-del if-none-match
+^https:\/\/hub\.kelee\.one\/list\.json header-del if-none-match
 
 [Body Rewrite]
-http-response ^https:\/\/hub\.kelee\.one\/list\.json loon:\/\/import\?plugin=(https:\/\/kelee\.one\/Tool\/Loon\/Lpx\/(.+?)\.lpx) https://script.hub/file/_start_/https%3A%2F%2Fkelee.one%2FTool%2FLoon%2FLpx%2F$2.lpx?type=surge-module
+^https:\/\/hub\.kelee\.one\/list\.json loon:\/\/import\?plugin=https:\/\/kelee\.one\/Tool\/Loon\/Lpx\/(.+?)\.lpx surge:///install-config?url=https%3A%2F%2Fscript.hub%2Ffile%2F_start_%2Fhttps%253A%252F%252Fkelee.one%252FTool%252FLoon%252FLpx%252F$1.lpx%3Ftype%3Dsurge-module
 
 [MITM]
 hostname = %APPEND% hub.kelee.one
