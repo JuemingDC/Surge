@@ -1,15 +1,13 @@
-#!name=Kelee Hub → Surge via ScriptHub
-#!desc=将 https://hub.kelee.one 的 Loon 插件导入链接改为 Surge 安装，并交给 Script Hub 转换
-#!author=Your Majesty
-#!category=工具
+#!name=适配可莉插件中心-Surge
+#!desc=将可莉插件中心 Loon 插件链接改为 Surge 安装，并经 ScriptHub 转换；使用前先安装 ScriptHub 模块。
+#!category=可莉插件中心
+#!author=原作者@iKeLee, modified
 
-[General]
-force-http-engine-hosts = %APPEND% hub.kelee.one, script.hub, *.script.hub
+[Body Rewrite]
+http-response https://(hub|pluginhub)\.kelee\.one/list\.json "loon://import\?plugin=(https://kelee.one/Tool/Loon/Lpx/(.+).lpx)" "surge:///install-module?url=http://script.hub/file/_start_/$1/_end_/$2.sgmodule%3Ftype%3Dloon-plugin%26target%3Dsurge-module%26del%3Dtrue%26jqEnabled%3Dtrue%26pm%3D.%26sni%3D."
 
-[Script]
-Kelee Hub: 改写导入链接 = type=http-response, pattern=^https?:\/\/hub\.kelee\.one\/, requires-body=1, max-size=-1, script-path=https://raw.githubusercontent.com/JuemingDC/Surge/refs/heads/main/JavaScript/script.js, timeout=300
-
-Script Hub: 重写转换 = type=http-request, pattern=^https?:\/\/script\.hub\/file\/_start_\/.+type=(?:qx-rewrite|surge-module|loon-plugin|all-module), script-path=https://raw.githubusercontent.com/Script-Hub-Org/Script-Hub/main/Rewrite-Parser.js, timeout=300
+[Header Rewrite]
+http-request https://(hub|pluginhub)\.kelee\.one/list\.json header-del if-none-match
 
 [MITM]
-hostname = %APPEND% hub.kelee.one, script.hub, *.script.hub
+hostname = %APPEND% hub.kelee.one, pluginhub.kelee.one
